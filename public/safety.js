@@ -3,6 +3,11 @@ export const ENHANCED_MAX_FLASHES_PER_SECOND = 1.5;
 export const MIN_TORCH_EDGE_GAP_MS = 1000 / MAX_FLASHES_PER_SECOND;
 export const MAX_SHOW_CUES = 24;
 export const MAX_SHOW_DURATION_MS = 10 * 60 * 1000;
+export const BEAT_MAP_QUANTUM_MS = 20;
+export const MAX_BEAT_EVENTS = 1_800;
+export const MAX_BEAT_MAP_LENGTH = MAX_BEAT_EVENTS * 2;
+export const BEAT_PULSE_MS = 110;
+const BEAT_MAP_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 export const TORCH_EFFECTS = Object.freeze({
   pulse:      { label: 'Pulse',        description: 'A soft, even beacon pulse.', pulses: 1, kind: 'pulse' },
@@ -43,17 +48,57 @@ export function normalizeTorchSettings(effect, rate, enhancedProtection = true) 
   return { effect: spec, rate: cap ? clamp(rate, 0.25, cap) : 0, maxRate: cap };
 }
 
+// Beat times are quantized to 20 ms and delta-encoded into a two-digit
+// base64url alphabet. The resulting timeline stays below the WebSocket's
+// 4 KiB message bound even for a ten-minute score at 180 BPM.
+export function decodeBeatMap(encoded, durationMs = MAX_SHOW_DURATION_MS) {
+  if (typeof encoded !== 'string' || encoded.length === 0 || encoded.length > MAX_BEAT_MAP_LENGTH || !Number.isSafeInteger(durationMs)) return null;
+  const times = [];
+  let elapsedUnits = 0, pending = null;
+  for (const character of encoded) {
+    const digit = BEAT_MAP_ALPHABET.indexOf(character);
+    if (digit < 0) return null;
+    const data = digit & 31, continuation = (digit & 32) !== 0;
+    let deltaUnits;
+    if (pending === null) {
+      if (continuation) { pending = data; continue; }
+      deltaUnits = data;
+    } else {
+      if (continuation) return null;
+      deltaUnits = pending + data * 32;
+      pending = null;
+      if (deltaUnits < 32) return null;
+    }
+    if (times.length > 0 && deltaUnits * BEAT_MAP_QUANTUM_MS < 250) return null;
+    elapsedUnits += deltaUnits;
+    const at = elapsedUnits * BEAT_MAP_QUANTUM_MS;
+    if (at >= durationMs || times.length >= MAX_BEAT_EVENTS) return null;
+    times.push(at);
+  }
+  return pending === null && times.length > 0 ? times : null;
+}
+
+const beatMapCache = new WeakMap();
+function getBeatTimes(plan) {
+  if (!plan?.beatMap) return null;
+  let times = beatMapCache.get(plan);
+  if (!times) { times = decodeBeatMap(plan.beatMap, plan.durationMs); if (!times) return null; beatMapCache.set(plan, times); }
+  return times;
+}
+
 // The controller compiles audio locally into a small, bounded cue sheet. Only
 // effect parameters and cue timing cross the network; audio and track metadata
 // stay in the controller's browser.
 export function normalizeShowPlan(plan, enhancedProtection = true) {
   if (plan === null) return { ok: true, plan: null };
-  if (!plan || Object.getPrototypeOf(plan) !== Object.prototype || Object.keys(plan).some((key) => !['durationMs', 'cues'].includes(key))) {
+  if (!plan || Object.getPrototypeOf(plan) !== Object.prototype || Object.keys(plan).some((key) => !['durationMs', 'cues', 'beatMap', 'beatMode'].includes(key))) {
     return { ok: false, error: 'Show plan has an invalid structure' };
   }
   if (!Number.isSafeInteger(plan.durationMs) || plan.durationMs < 1_000 || plan.durationMs > MAX_SHOW_DURATION_MS) {
     return { ok: false, error: 'Show duration must be between 1 second and 10 minutes' };
   }
+  if (plan.beatMap !== undefined && !decodeBeatMap(plan.beatMap, plan.durationMs)) return { ok: false, error: 'Beat keyframes have an invalid structure or timing' };
+  if (plan.beatMode !== undefined && (!['detected', 'tempo-grid'].includes(plan.beatMode) || plan.beatMap === undefined)) return { ok: false, error: 'Beat keyframe mode is unsupported' };
   if (!Array.isArray(plan.cues) || plan.cues.length < 1 || plan.cues.length > MAX_SHOW_CUES) {
     return { ok: false, error: `A show must contain between 1 and ${MAX_SHOW_CUES} cues` };
   }
@@ -76,7 +121,7 @@ export function normalizeShowPlan(plan, enhancedProtection = true) {
     cues.push({ at: cue.at, effect: normalized.effect, rate: normalized.rate, screenColor: cue.screenColor.toLowerCase(), accentColor: cue.accentColor.toLowerCase(), group: cue.group ?? null });
     previousAt = cue.at;
   }
-  return { ok: true, plan: { durationMs: plan.durationMs, cues } };
+  return { ok: true, plan: { durationMs: plan.durationMs, cues, ...(plan.beatMap === undefined ? {} : { beatMap: plan.beatMap }), ...(plan.beatMode === undefined ? {} : { beatMode: plan.beatMode }) } };
 }
 
 export function showCueAt(plan, elapsedMs) {
@@ -96,7 +141,15 @@ export function showStateAt(state, serverTimeMs, groupIndex = null) {
   const elapsed = serverTimeMs - state.startedAt;
   const cue = showCueAt(state.showPlan, elapsed);
   if (!cue || (cue.group !== null && cue.group !== groupIndex)) return { ...state, status: 'idle', torchEnabled: false };
-  return { ...state, effect: cue.effect, rate: cue.rate, screenColor: cue.screenColor, accentColor: cue.accentColor, startedAt: state.startedAt + cue.at };
+  const beatTimes = getBeatTimes(state.showPlan);
+  let beatIndex = -1, beatPulseAt = null;
+  if (beatTimes) {
+    let low = 0, high = beatTimes.length;
+    while (low < high) { const middle = (low + high) >> 1; if (beatTimes[middle] <= elapsed) low = middle + 1; else high = middle; }
+    beatIndex = low - 1;
+    if (beatIndex >= 0 && elapsed - beatTimes[beatIndex] < BEAT_PULSE_MS) beatPulseAt = state.startedAt + beatTimes[beatIndex];
+  }
+  return { ...state, effect: cue.effect, rate: cue.rate, screenColor: cue.screenColor, accentColor: cue.accentColor, startedAt: state.startedAt + cue.at, beatIndex, beatPulseAt };
 }
 
 const mod = (n, m) => ((n % m) + m) % m;
@@ -115,6 +168,7 @@ export function sampleTorch(state, serverTimeMs, audienceSeed = 0, audienceIndex
   const spec = TORCH_EFFECTS[state.effect];
   if (!spec) return false;
   if (serverTimeMs < state.startedAt) return false;
+  if (state.showPlan?.beatMap) return Number.isFinite(state.beatPulseAt) && serverTimeMs >= state.beatPulseAt && serverTimeMs - state.beatPulseAt < BEAT_PULSE_MS;
   if (spec.kind === 'solid') return true;
   const rate = normalizeTorchSettings(state.effect, state.rate, state.enhancedProtection).rate;
   if (!rate) return false;

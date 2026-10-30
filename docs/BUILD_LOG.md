@@ -1,5 +1,10 @@
 # Build log
 
+## 2026-10-30 — Discrete detected-beat keyframes
+
+- Replaced the generated music score's 16-beat continuous-BPM looks with individual transient-aligned beat keyframes. The beat timeline is compactly delta-encoded so a ten-minute score fits within the existing WebSocket message limit.
+- Audience and preview render one light hit at each beat keyframe, alternate the selected screen colors per hit, and retain their existing local flash governors. Faster beats can be skipped by those device safeguards.
+
 ## 2026-10-30 — Reconnect loop and clock sample validation
 
 - Removed an invalid comparison between the browser and server `performance.now()` clocks. Clock samples now validate the client timestamp's type and range without assuming both processes share a monotonic clock origin.

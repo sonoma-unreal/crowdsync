@@ -13,7 +13,7 @@
 | Controller screen override | Implemented | A room-wide switch forces screen output and the primary/accent palette on every guest device |
 | Simulated crowd preview | Implemented | 96 locally simulated audience lights use the shared effect sampler and safety governor; preview is visual only |
 | Manual timed light score | Implemented | Add, reorder and remove bounded cues, optionally targeting anonymous audience sections |
-| Local music cue designer | Implemented | Controller browser decodes a local track, estimates tempo/loudness, and generates up to 24 beat-aligned cues for a score of up to 10 minutes |
+| Local music cue designer | Implemented | Controller browser detects audio beat transients and encodes discrete keyframes for up to 10 minutes; per-device flash limits still apply |
 | Local track playback | Implemented | Audio stays on the controller device and is scheduled against the room clock; no upload or server-side audio analysis |
 | Saved light scores | Implemented | Up to 20 cue sheets saved in that controller browser's local storage; audio files are not saved |
 | Anonymous audience sections | Implemented | Configure 2–6 sections before guests join; guests choose during sync and cues may target a section |

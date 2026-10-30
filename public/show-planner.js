@@ -1,6 +1,6 @@
-import { MAX_SHOW_CUES, maxRateForEffect, normalizeTorchSettings } from './safety.js';
+import { BEAT_MAP_QUANTUM_MS, MAX_BEAT_EVENTS, MAX_BEAT_MAP_LENGTH, maxRateForEffect, normalizeTorchSettings } from './safety.js';
 
-const EFFECT_FLOW = ['pulse', 'wave', 'twinkle', 'comet', 'ripple', 'rapidSparkle', 'crescendo', 'chase', 'sparkle'];
+const BEAT_MAP_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export function analyzeAudioBuffer(buffer) {
@@ -23,7 +23,8 @@ export function analyzeAudioBuffer(buffer) {
     envelope.push(count ? Math.sqrt(sum / count) : 0);
   }
   const bpm = estimateTempo(envelope, frameMs);
-  return { durationMs, bpm, frameMs, envelope };
+  const beatResult = detectBeatTimes({ durationMs, bpm, frameMs, envelope });
+  return { durationMs, bpm, frameMs, envelope, beatTimes: beatResult.times, beatMode: beatResult.mode };
 }
 
 export function estimateTempo(envelope, frameMs = 50) {
@@ -52,28 +53,68 @@ export function estimateTempo(envelope, frameMs = 50) {
   return Math.round(bestBpm);
 }
 
-export function buildMusicPlan(analysis, { bpm, screenColor, accentColor, enhancedProtection = true, groupCount = 0 }) {
-  if (!analysis || !Number.isFinite(analysis.durationMs) || !Array.isArray(analysis.envelope)) throw new Error('Analyze a track before building its light score');
-  const safeBpm = clamp(Math.round(Number(bpm) || 120), 60, 180);
-  const beatMs = 60_000 / safeBpm;
-  let beatsPerCue = 16;
-  while (Math.ceil(analysis.durationMs / (beatMs * beatsPerCue)) > MAX_SHOW_CUES) beatsPerCue += 16;
-  const cueLengthMs = beatMs * beatsPerCue;
-  const count = Math.min(MAX_SHOW_CUES, Math.ceil(analysis.durationMs / cueLengthMs));
-  const peak = Math.max(0.0001, ...analysis.envelope);
-  const cues = [];
-
-  for (let i = 0; i < count; i++) {
-    const at = Math.round(i * cueLengthMs);
-    const end = Math.min(analysis.durationMs, Math.round((i + 1) * cueLengthMs));
-    const first = Math.floor(at / analysis.frameMs), last = Math.min(analysis.envelope.length, Math.ceil(end / analysis.frameMs));
-    const energy = analysis.envelope.slice(first, Math.max(first + 1, last)).reduce((sum, value) => sum + value, 0) / Math.max(1, last - first) / peak;
-    const flowIndex = Math.floor(clamp(energy, 0, 0.999) * EFFECT_FLOW.length);
-    const effect = EFFECT_FLOW[(flowIndex + i * 3) % EFFECT_FLOW.length];
-    const baseRate = 0.55 + clamp(energy, 0, 1) * 0.9;
-    const rate = normalizeTorchSettings(effect, Math.min(baseRate, maxRateForEffect(effect, enhancedProtection) || 0), enhancedProtection).rate;
-    const swap = Math.floor(i / 2) % 2 === 1;
-    cues.push({ at, effect, rate, screenColor: swap ? accentColor : screenColor, accentColor: swap ? screenColor : accentColor, group: null });
+export function detectBeatTimes(analysis) {
+  const { durationMs, envelope, frameMs = 50 } = analysis || {};
+  const bpm = clamp(Math.round(Number(analysis?.bpm) || 120), 60, 180);
+  if (!Number.isFinite(durationMs) || !Array.isArray(envelope) || envelope.length < 3 || !Number.isFinite(frameMs) || frameMs <= 0) {
+    throw new Error('Audio analysis does not contain a usable beat envelope');
   }
-  return { durationMs: analysis.durationMs, cues, bpm: safeBpm, beatsPerCue };
+
+  const onset = new Float64Array(envelope.length);
+  let sum = 0, sumSquares = 0;
+  for (let i = 1; i < envelope.length; i++) {
+    onset[i] = Math.max(0, Number(envelope[i]) - Number(envelope[i - 1]));
+    sum += onset[i]; sumSquares += onset[i] * onset[i];
+  }
+  const mean = sum / onset.length;
+  const deviation = Math.sqrt(Math.max(0, sumSquares / onset.length - mean * mean));
+  const threshold = Math.max(0.00001, mean * 1.45, mean + deviation * 0.35);
+  const minimumGapMs = Math.max(333, Math.round((60_000 / bpm) * 0.68));
+  const peaks = [];
+  for (let i = 1; i < onset.length - 1; i++) {
+    if (onset[i] < threshold || onset[i] < onset[i - 1] || onset[i] <= onset[i + 1]) continue;
+    const peak = { at: Math.min(durationMs - 1, Math.round(i * frameMs)), strength: onset[i] };
+    const previous = peaks.at(-1);
+    if (previous && peak.at - previous.at < minimumGapMs) {
+      if (peak.strength > previous.strength) peaks[peaks.length - 1] = peak;
+    } else if (peaks.length < MAX_BEAT_EVENTS) peaks.push(peak);
+  }
+
+  const expectedCount = durationMs / (60_000 / bpm);
+  if (peaks.length >= 2 && peaks.length >= Math.min(8, expectedCount * 0.25)) {
+    return { times: peaks.map(({ at }) => at), mode: 'detected' };
+  }
+
+  const times = [];
+  const beatMs = 60_000 / bpm;
+  for (let at = 0; at < durationMs && times.length < MAX_BEAT_EVENTS; at += beatMs) times.push(Math.round(at));
+  return { times, mode: 'tempo-grid' };
+}
+
+export function encodeBeatMap(beatTimes) {
+  if (!Array.isArray(beatTimes) || beatTimes.length < 1 || beatTimes.length > MAX_BEAT_EVENTS) throw new Error('The detected beat count is outside the supported range');
+  let previousUnits = 0;
+  let encoded = '';
+  for (let i = 0; i < beatTimes.length; i++) {
+    const at = Number(beatTimes[i]);
+    if (!Number.isFinite(at) || at < 0) throw new Error('A detected beat has an invalid timestamp');
+    const units = Math.round(at / BEAT_MAP_QUANTUM_MS);
+    const delta = units - previousUnits;
+    if (delta < 0 || delta > 1023 || (i > 0 && delta * BEAT_MAP_QUANTUM_MS < 250)) throw new Error('Detected beats are too close together to encode safely');
+    if (delta < 32) encoded += BEAT_MAP_ALPHABET[delta];
+    else encoded += BEAT_MAP_ALPHABET[32 + (delta & 31)] + BEAT_MAP_ALPHABET[Math.floor(delta / 32)];
+    previousUnits = units;
+  }
+  if (encoded.length > MAX_BEAT_MAP_LENGTH) throw new Error('The beat timeline is too large to share with the room');
+  return encoded;
+}
+
+export function buildMusicPlan(analysis, { bpm, screenColor, accentColor, enhancedProtection = true } = {}) {
+  if (!analysis || !Number.isFinite(analysis.durationMs) || !Array.isArray(analysis.envelope)) throw new Error('Analyze a track before building its light score');
+  const safeBpm = clamp(Math.round(Number(bpm) || analysis.bpm || 120), 60, 180);
+  const beatResult = detectBeatTimes({ ...analysis, bpm: safeBpm });
+  const beatMap = encodeBeatMap(beatResult.times);
+  const pulseRate = normalizeTorchSettings('pulse', Math.min(1, maxRateForEffect('pulse', enhancedProtection)), enhancedProtection).rate;
+  const cues = [{ at: 0, effect: 'pulse', rate: pulseRate, screenColor, accentColor, group: null }];
+  return { durationMs: analysis.durationMs, cues, beatMap, bpm: safeBpm, beatCount: beatResult.times.length, beatMode: beatResult.mode };
 }
