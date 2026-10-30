@@ -90,7 +90,7 @@ function validateCommand(message) {
   const allowed = new Set(['type', 'command', 'commandId', ...commandFields[message.command]]);
   if (Object.keys(message).some((key) => !allowed.has(key)) || !Number.isSafeInteger(message.commandId) || message.commandId < 1) return false;
   switch (message.command) {
-    case 'effect': return typeof message.effect === 'string' && Object.hasOwn(TORCH_EFFECTS, message.effect) && (message.rate === undefined || (typeof message.rate === 'number' && Number.isFinite(message.rate) && message.rate >= 0.25 && message.rate <= 3));
+    case 'effect': return typeof message.effect === 'string' && Object.hasOwn(TORCH_EFFECTS, message.effect) && (message.rate === undefined || (typeof message.rate === 'number' && Number.isFinite(message.rate) && message.rate >= 0 && message.rate <= 3));
     case 'rate': return typeof message.value === 'number' && Number.isFinite(message.value) && message.value >= 0.25 && message.value <= 3;
     case 'protection': return typeof message.enabled === 'boolean' && (message.acknowledgedRisk === undefined || typeof message.acknowledgedRisk === 'boolean');
     case 'torch': case 'screen-mode': return typeof message.enabled === 'boolean';

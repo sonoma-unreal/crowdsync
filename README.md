@@ -1,6 +1,6 @@
 # CrowdSync
 
-CrowdSync is an independently implemented, self-hostable synchronized audience light show. The home screen separates hosting from joining. A controller creates a room and shares its six-digit code, join URL, or QR code; guests complete a controller-started sync test before joining. The controller can run one of 18 synchronized patterns or build a timed, beat-aligned light score from a local audio file. Guests can use their torch or screen.
+CrowdSync is an independently implemented, self-hostable synchronized audience light show. The home screen separates hosting from joining. A controller creates a room and shares its six-digit code, join URL, or QR code; guests complete a controller-started sync test before joining. The controller can run one of 17 synchronized patterns or build a timed, beat-aligned light score from a local audio file. Guests can use their torch or screen.
 
 ## Requirements
 
@@ -51,9 +51,9 @@ npm start
 - Each show must complete the controller-started repeating beep/flash sync test before it can start. Guests enter the six-digit code, accept the notice, choose torch or screen output, adjust their local offset, and confirm before becoming joined participants. The test completes when all current waiters confirm, or the controller can finish it manually. Late arrivals use another controller-started sync test.
 - The controller can split the audience into two to six anonymous sections before anyone joins. Guests choose a section during sync; cue sheets can target a section or everyone. CrowdSync stores no participant names or section answers beyond the active room.
 - A local track can be decoded in the controller browser, with a tempo estimate and compact beat-aligned cue schedule. Track audio and metadata stay on that device; only cue times, effects, colors and section targets are sent to the room. Saved light scores are stored in that browser and do not include audio files.
-- New rooms start with enhanced accessibility protection on. It caps each flashing pattern at 1.5 device-light pulses per second, accounting for multi-pulse patterns. Disabling it requires the controller to acknowledge the warning shown in the console. Screen visualizer frames use this same update ceiling.
+- New rooms start with enhanced accessibility protection on. It caps each flashing pattern at 1.5 device-light pulses per second, accounting for multi-pulse patterns. Disabling it requires the controller to acknowledge the warning shown in the console.
 - A fixed safeguard remains active in either mode: at most three torch on-edges in any rolling second, with a minimum 333 ms gap. It cannot be disabled from the controller.
-- The physical torch is binary and cannot be dimmed or colored by the browser. Guests choose Screen or Torch in Settings; the controller can force all guests to screens. The controller's primary/accent palette colors screen effects, including a segmented visualizer. The torch track is never displayed or recorded, and the application does not capture or store audience video.
+- The physical torch is binary and cannot be dimmed or colored by the browser. Guests choose Screen or Torch in Settings; the controller can force all guests to screens. The controller's primary/accent palette colors screen effects. The torch track is never displayed or recorded, and the application does not capture or store audience video.
 - Pause, stop, blackout, leaving, backgrounding, disconnect, and room end request torch off. Guests also have a local off control.
 - There is no audience identity, microphone request, audio upload, analytics, or tracking. Room state is ephemeral.
 

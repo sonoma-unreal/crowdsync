@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createTorchGovernor, ENHANCED_MAX_FLASHES_PER_SECOND, MAX_FLASHES_PER_SECOND, normalizeTorchSettings, sampleTorch, TORCH_EFFECTS } from '../src/safety.js';
 
 test('all torch effects produce deterministic on/off states only while running and enabled', () => {
+  assert.equal(Object.hasOwn(TORCH_EFFECTS, 'spectrum'), false);
   for (const effect of Object.keys(TORCH_EFFECTS)) {
     const state = { status: 'running', torchEnabled: true, enhancedProtection: true, startedAt: 0, effect, rate: 0.5 };
     assert.equal(typeof sampleTorch(state, 1200, 18, 1, 5), 'boolean', effect);

@@ -9,7 +9,7 @@
 | Audience consent and output selection | Implemented | Guests choose screen or torch in Settings; unavailable/denied torch can fall back to screen |
 | Participant Settings tab | Implemented | Screen/Torch selection stays in settings |
 | WebSocket room presence and synchronized clock | Implemented | Integration source covers challenge, confirmation, presence, and clock samples |
-| 18 synchronized light patterns | Implemented | Includes steady solid light, rapid crowd sparkles, and a segmented screen visualizer; screen colors are controller-configurable |
+| 17 synchronized light patterns | Implemented | Includes steady solid light and rapid crowd sparkles; screen colors are controller-configurable |
 | Controller screen override | Implemented | A room-wide switch forces screen output and the primary/accent palette on every guest device |
 | Simulated crowd preview | Implemented | 96 locally simulated audience lights use the shared effect sampler and safety governor; preview is visual only |
 | Manual timed light score | Implemented | Add, reorder and remove bounded cues, optionally targeting anonymous audience sections |

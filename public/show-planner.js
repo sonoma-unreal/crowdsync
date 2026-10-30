@@ -1,6 +1,6 @@
 import { MAX_SHOW_CUES, maxRateForEffect, normalizeTorchSettings } from './safety.js';
 
-const EFFECT_FLOW = ['pulse', 'wave', 'twinkle', 'comet', 'ripple', 'rapidSparkle', 'crescendo', 'spectrum', 'chase', 'sparkle'];
+const EFFECT_FLOW = ['pulse', 'wave', 'twinkle', 'comet', 'ripple', 'rapidSparkle', 'crescendo', 'chase', 'sparkle'];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export function analyzeAudioBuffer(buffer) {

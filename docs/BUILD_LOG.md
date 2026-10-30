@@ -1,5 +1,10 @@
 # Build log
 
+## 2026-10-30 — Effect transitions and visualizer removal
+
+- Fixed changing from Solid light to a pulsing effect: Solid uses a zero pulse rate, which is now accepted as an effect-transition input and normalized to the destination effect's safe minimum. The controller also falls back to its visible rate setting when the current effect has no pulse rate.
+- Removed Spectrum visualizer from the live effect catalog, audience output, and current feature count. The earlier entry below records the historical addition.
+
 ## 2026-10-29 — Original Show desk and local cue designer
 
 - Used the supplied Wildlights pages and screenshots as a product-workflow reference, then built an independent CrowdSync Show desk with a 96-phone simulated preview, a manual cue sheet, optional anonymous audience sections, and local saved light scores.

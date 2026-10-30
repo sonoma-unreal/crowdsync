@@ -37,8 +37,6 @@
 .audience-tab,.icon-label{display:inline-flex;align-items:center;justify-content:center;gap:7px}
 .settings-option .ui-icon{color:#8bb8ff}
 @media(max-width:540px){.audience-tab .ui-icon{width:14px;height:14px}}
-.screen-visualizer{position:absolute;inset:0;width:100%;height:100%;display:block}
-.screen-visualizer[hidden]{display:none}
 .screen-colors{display:flex;gap:12px;padding:8px 2px 12px}
 .screen-colors label{display:flex;align-items:center;gap:9px;color:#cbd3df;font-size:10px}
 .screen-colors input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--line);border-radius:7px;background:#11151e}

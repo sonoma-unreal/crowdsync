@@ -22,7 +22,6 @@ export const TORCH_EFFECTS = Object.freeze({
   crescendo:  { label: 'Crescendo',    description: 'A long torch hold followed by a measured release.', pulses: 1, kind: 'crescendo' },
   solid:      { label: 'Solid light', description: 'Hold the selected screen color; torches stay on while the cue runs.', pulses: 0, kind: 'solid' },
   rapidSparkle:{ label:'Rapid sparkles',description:'A scattered crowd shimmer; each phone stays under the set flash cap.',pulses:1,kind:'rapidSparkle' },
-  spectrum:   { label: 'Spectrum',     description: 'A colored segmented screen visualizer; torches pulse to its beat.', pulses: 1, kind: 'spectrum' },
 });
 
 export function clamp(value, min, max) {
@@ -167,7 +166,6 @@ export function sampleTorch(state, serverTimeMs, audienceSeed = 0, audienceIndex
     case 'march': return split([[0.03, 0.15], [0.28, 0.40]]);
     case 'stutter': return split([[0.02, 0.09], [0.14, 0.21], [0.26, 0.33]]);
     case 'crescendo': return basePhase < 0.58;
-    case 'spectrum': return basePhase < 0.22;
     default: return false;
   }
 }
