@@ -65,8 +65,8 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   const afterAudienceAttacks=(await (await fetch(`${base}/api/operator/state`,{headers:{Authorization:`Bearer ${roomA.token}`}})).json()).state;assert.equal(afterAudienceAttacks.status,beforeAudienceAttacks.status);assert.equal(afterAudienceAttacks.effect,beforeAudienceAttacks.effect);assert.equal(afterAudienceAttacks.torchEnabled,beforeAudienceAttacks.torchEnabled);
   assert.equal((await fetch(`${base}/api/operator/command`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command:'blackout',commandId:1})})).status,401);
   assert.equal((await fetch(`${base}/api/operator/close`,{method:'POST'})).status,401);assert.equal((await fetch(`${base}/api/rooms/${roomA.room.id}`)).status,200);
-  audience.send(JSON.stringify({type:'sync',clientSent:234.5}));
-  const sync=await nextMessage(audience,m=>m.type==='sync');assert.equal(sync.clientSent,234.5);assert.ok(sync.serverSent>=sync.serverReceived);
+  audience.send(JSON.stringify({type:'sync',clientSent:123456789.5}));
+  const sync=await nextMessage(audience,m=>m.type==='sync');assert.equal(sync.clientSent,123456789.5);assert.ok(sync.serverSent>=sync.serverReceived);
   const unauthSync = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: 'https://evil.example' } });
   const originResponse=await new Promise((resolve) => { unauthSync.once('error', resolve); unauthSync.once('unexpected-response', (_req, response) => resolve(response)); });assert.equal(originResponse.statusCode,403);
   const unjoined = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });

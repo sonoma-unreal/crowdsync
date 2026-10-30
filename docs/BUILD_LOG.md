@@ -1,5 +1,10 @@
 # Build log
 
+## 2026-10-30 — Reconnect loop and clock sample validation
+
+- Removed an invalid comparison between the browser and server `performance.now()` clocks. Clock samples now validate the client timestamp's type and range without assuming both processes share a monotonic clock origin.
+- Keep operator reconnect backoff escalating until the connection remains authenticated for 15 seconds, and log close codes/reasons so short-lived failures are diagnosable. Regression coverage now uses a client timestamp far from the server process clock.
+
 ## 2026-10-30 — Effect transitions and visualizer removal
 
 - Fixed changing from Solid light to a pulsing effect: Solid uses a zero pulse rate, which is now accepted as an effect-transition input and normalized to the destination effect's safe minimum. The controller also falls back to its visible rate setting when the current effect has no pulse rate.

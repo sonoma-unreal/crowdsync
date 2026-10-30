@@ -259,7 +259,7 @@ wss.on('connection', (ws) => {
     if (!(ws.role === 'operator' && emergency)) rateWindow.push(now);
     if (ws.role === 'operator' && (!ws.claims || ws.claims.exp <= now || !rooms.has(ws.room.id) || rooms.get(ws.room.id) !== ws.room)) return ws.close(1008, 'Operator session expired');
     if (message.type === 'sync' && Number.isFinite(message.clientSent)) {
-      if (!ws.role || Object.keys(message).some((key) => !['type', 'clientSent'].includes(key)) || Math.abs(performance.now() - message.clientSent) > 60_000) return ws.close(1008, 'Invalid sync message');
+      if (!ws.role || Object.keys(message).some((key) => !['type', 'clientSent'].includes(key)) || !Number.isFinite(message.clientSent) || message.clientSent < 0 || message.clientSent > Number.MAX_SAFE_INTEGER) return ws.close(1008, 'Invalid sync message');
       const serverReceived = serverNow(); send(ws, { type: 'sync', clientSent: message.clientSent, serverReceived, serverSent: serverNow() }); return;
     }
     if (message.type === 'heartbeat') {
