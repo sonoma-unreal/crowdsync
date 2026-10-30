@@ -1,0 +1,37 @@
+# Security and privacy overview
+
+## Scope and trust boundaries
+
+The Node.js process owns ephemeral room state and authorizes controller actions. The browser controller and audience are untrusted clients. Fastify serves the pages and room APIs; `/ws` carries audience sync/presence and controller commands. The controller bearer token grants control over one room instance. The six-digit room code is a public join locator, not an operator credential. All state disappears when a room closes, expires after 12 hours, or the process exits.
+
+Controller APIs validate the HMAC token, operator role, room id, room instance and expiry. WebSocket controller authentication happens in the first `hello` message; no sync response or room snapshot is sent before authentication. Audience clients may read the audience-visible room snapshot and confirm their own sync test, but all controller messages are rejected for audience sockets. A successful confirmation during the active controller sync test earns a signed audience reconnect token scoped to that room instance and its remaining lifetime; the server ignores legacy `syncConfirmed` claims as authorization. Commands have strict type, field, range and color validation. Room-wide command IDs remain monotonic across controller WebSocket reconnects and are also stored in tab-scoped session storage by the controller client.
+
+## Controls verified in this revision
+
+- WebSocket upgrades require the exact configured `PUBLIC_BASE_URL` origin (or, outside production, the request host origin when no base is configured). Missing, cross-origin and malformed upgrade paths are rejected before upgrade.
+- WebSocket payloads are capped at 4 KiB; binary messages are rejected; unauthenticated sockets must send `hello` within five seconds; each socket is capped at 200 messages per rolling ten seconds; concurrent WebSockets are capped at 5,000 by default; payload compression is disabled; and outbound queues over 1 MiB are closed.
+- WebSockets use ping/pong liveness checks every 20 seconds. Controller sockets recheck token expiry; expiry and room closure invalidate existing connections. The controller sends a heartbeat every ten seconds. If no controller heartbeat arrives within the default 30-second lease while the show is running, the server pauses the show, disables output and advances the room epoch (checked at most one second later). Resuming requires a controller action.
+- Standard response headers include a same-origin Content Security Policy, framing protection, MIME sniffing protection, a restrictive referrer policy, same-origin resource policy and a Permissions Policy that allows camera access only to this origin for torch control. Production adds HSTS. Production requires a 32-character session secret and HTTPS `PUBLIC_BASE_URL`.
+- The development token-signing key is random per process and is not a constant fallback. Since rooms are ephemeral, restarting also invalidates all rooms and tokens.
+- `.env*` files are ignored except the placeholder-only `.env.example`. Request logs omit query strings, request bodies, headers and remote addresses.
+- Emergency `stop` and `blackout` remain available under the ordinary controller command throttle and general message-rate cap. Existing flash limits and the browser governor are unchanged.
+
+## Data collected and retained
+
+- Show name, settings, room code, sequence and active sync state are held in process memory for at most the room's 12-hour lifetime.
+- Live audience connections are represented by WebSocket objects and counts. No participant account, stable device ID, IP history, analytics, contacts, location, microphone audio or audience media is collected or persisted.
+- Room-creation rate limiting keeps recent IP timestamps in process memory for a 60-second window. They are not written to disk or included in request logs.
+- The controller token, room metadata, QR data URL and monotonic command counter are stored in tab-scoped `sessionStorage`. This avoids a URL credential but remains accessible to same-origin JavaScript; a future XSS would expose the token. There is no separate logout/revoke UI. Ending a room revokes access by deleting the room; room/token expiry is 12 hours.
+- Up to 20 named light cue sheets may be saved in the controller browser's `localStorage`. They contain cue timing, effect names, colors and optional section indexes, not audio files or track metadata. Same-origin JavaScript can read or change them; clearing browser site data removes them. They are not sent to the server until a score is actively selected for a room.
+- Audience sync timing offset, preferred output mode and the signed reconnect bearer are stored in tab-scoped `sessionStorage`. The reconnect token is issued only after successful sync confirmation, is scoped to one room instance, and expires with the room; same-origin script compromise can read it. The room code is a public locator, not an identity check, and anyone knowing it may request to join and complete the sync flow.
+- Physical torch control requests camera permission because that browser API uses a video track. CrowdSync reads torch capability and applies the torch constraint; it does not display, inspect, record, upload or persist video frames. Screen output does not request camera access. No FanCam feature or media-retention path exists.
+
+## Remaining risks and operating requirements
+
+- Host creation is intentionally no-login; creation is limited to six rooms per IP per minute and global room capacity. The in-memory limit is per process and can be bypassed by distributed sources. The join code has only six digits and is a locator; use network-level protections before public exposure.
+- The token is a bearer credential in tab-scoped session storage. Same-origin script compromise can use it. Account recovery, multi-operator delegation, token rotation without ending a room, and a standalone logout control are not implemented.
+- Rate limits, sessions, rooms and capacity limits are process-local. There is no distributed denial-of-service protection or multi-process coordination.
+- Deployments must terminate TLS at a trusted reverse proxy, set the exact HTTPS `PUBLIC_BASE_URL`, preserve WebSocket upgrades, restrict direct origin access where practical and apply network/provider rate limits. None of these deployment controls have been exercised here.
+- The controller lease is a bounded safety fallback, not a guarantee against browser suspension, network partition timing, or device/browser torch behavior. Physical phone behavior and accessibility effects were not validated on real devices in this pass.
+
+This document describes checked implementation behavior; it is not a security certification or a claim that the application is fully secure. The review used the [OWASP ASVS 5.0.0](https://asvs.owasp.org/) as a verification reference and the [OWASP WebSocket Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html) for origin, authentication, payload, rate and lifecycle controls. No ASVS compliance level is claimed.

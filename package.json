@@ -1,0 +1,22 @@
+{
+  "name": "crowdsync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted synchronized audience light show",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "load": "node scripts/load.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "fastify": "^5.6.2",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3"
+  }
+}

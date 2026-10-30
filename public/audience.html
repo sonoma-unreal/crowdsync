@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#05060a">
+  <title>Join CrowdSync</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="audience-page">
+  <main id="output" class="audience-output" aria-hidden="true"><div class="torch-audience-orb"></div><canvas id="visualizer" class="screen-visualizer" hidden></canvas><div id="marquee" class="audience-message" aria-live="polite" hidden></div></main>
+  <header class="audience-header">
+    <a class="brand" href="/"><span class="brand-mark">C</span><span>Crowd<span class="brand-light">Sync</span></span></a>
+    <nav id="audience-tabs" class="audience-tabs hidden" aria-label="Your show">
+      <button id="show-tab" class="audience-tab selected" type="button" aria-selected="true"><span>Show</span></button>
+      <button id="settings-tab" class="audience-tab" type="button" aria-selected="false"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg><span>Settings</span></button>
+    </nav>
+    <span id="connection" class="connection">NOT CONNECTED</span>
+  </header>
+
+  <section id="join-gate" class="join-gate">
+    <div class="join-dialog">
+      <div class="eyebrow">JOIN THE SHOW</div><h1 id="show-name">CrowdSync</h1>
+      <p class="muted">Show code <strong id="show-code">------</strong></p>
+      <div class="safety-notice"><span class="safety-icon">!</span><div><strong>Photosensitivity notice</strong><p>This show may use rapidly flashing phone torches or screens. It may affect people with photosensitive epilepsy or other light sensitivities. You can opt out at any time; choose whether to participate based on your needs.</p></div></div>
+      <label class="consent-row"><input id="consent" type="checkbox"><span>I have read the notice and want to continue.</span></label>
+      <button id="join" class="button button-primary button-large" disabled>Continue to sync test</button>
+      <p class="torch-note">Torch permission is used only to control the flashlight. If torch control is unavailable, a synchronized screen-light fallback is used.</p>
+    </div>
+  </section>
+
+  <section id="sync-gate" class="join-gate hidden">
+    <div class="join-dialog sync-dialog">
+      <div class="eyebrow">CONTROLLER SYNC TEST</div><h1>Match the beat</h1>
+      <p id="sync-instructions" class="muted">Waiting for the controller to start the repeating beep and light pulse.</p>
+      <div class="sync-rail" aria-label="Sync timing indicator"><span class="sync-target"></span><span id="sync-marker" class="sync-marker"></span></div>
+      <p id="offset-label" class="offset-label">Light offset: 0 ms</p>
+      <section id="audience-groups" class="audience-groups hidden" aria-labelledby="audience-group-title"><strong id="audience-group-title">Choose your section</strong><p class="small-copy">Your choice only controls which parts of the light score your phone follows.</p><div id="audience-group-options" class="audience-group-options"></div></section>
+      <div class="offset-control" role="group" aria-label="Adjust light timing">
+        <span>Adjust light timing</span>
+        <div class="offset-buttons">
+          <button id="offset-earlier" class="button button-secondary" type="button" aria-label="Move light pulse 10 milliseconds earlier">−10 ms</button>
+          <button id="offset-reset" class="button button-quiet" type="button">Reset</button>
+          <button id="offset-later" class="button button-secondary" type="button" aria-label="Move light pulse 10 milliseconds later">+10 ms</button>
+        </div>
+      </div>
+      <div class="sync-actions audience-sync-actions">
+        <button id="calibration-torch" class="button button-secondary">Enable torch</button>
+        <button id="use-screen" class="button button-secondary">Use screen instead</button>
+        <button id="confirm-sync" class="button button-primary" disabled>Confirm sync &amp; join</button>
+      </div>
+      <p class="torch-note">If torch access is unavailable or denied, CrowdSync switches to your screen. Listen for the repeating beep and line up your light pulse with the target.</p>
+      <button id="cancel-join" class="text-button">Leave</button>
+    </div>
+  </section>
+
+  <main id="audience-settings" class="audience-settings hidden" aria-labelledby="settings-heading">
+    <section class="settings-card">
+      <div class="eyebrow">YOUR EXPERIENCE</div><h1 id="settings-heading">Settings</h1>
+      <p class="muted">Choose how your phone takes part. These choices affect only this device.</p>
+      <div class="settings-option"><div><strong class="icon-label"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>Light output</strong><p id="light-mode-description" class="small-copy">Choose the screen or phone torch for this device.</p><p id="screen-mode-lock" class="small-copy hidden">The controller has set every phone to screen output.</p></div><div id="output-mode-switch" class="output-mode-switch" role="group" aria-label="Choose light output"><button id="mode-screen" type="button" aria-pressed="false">Screen</button><button id="mode-torch" type="button" aria-pressed="true">Torch flash</button></div></div>
+    </section>
+  </main>
+
+
+  <aside id="live-guide" class="live-guide hidden" role="status" aria-live="polite">
+    <div><strong>The show is live</strong><p>Keep this page open. CrowdSync will keep your display awake when your browser allows it. Use Settings to choose Screen or Torch flash; tap Turn off any time.</p></div>
+    <div class="live-guide-actions"><button id="guide-settings" class="button button-secondary" type="button">Settings</button><button id="dismiss-guide" class="button button-quiet" type="button">Got it</button></div>
+  </aside>
+  <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button></div></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/assets/audience.js"></script>
+</body>
+</html>
