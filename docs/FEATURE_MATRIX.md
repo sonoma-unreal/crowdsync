@@ -22,10 +22,10 @@
 | Audience local off and emergency blackout | Implemented | Local output shutdown, room blackout bypasses ordinary command throttle |
 | Audience message | Implemented | Bounded plain text; message does not affect the torch |
 | Physical torch | Implemented, user-reported working | Browser/device support varies; this revision not physically verified |
-| Production desk diagnostics | Implemented | Live connection status, best RTT, clock offset estimate, snapshot sequence, participant count, and bounded tab-local activity feed |
+| Production desk diagnostics | Implemented | Live connection status, best RTT, rolling browser-to-room monotonic clock alignment, snapshot sequence, participant count, and bounded tab-local activity feed |
 | Snapshot sequencing and duplicate command handling | Implemented | Monotonic room sequence; room-scoped operator command IDs reject replay across reconnects |
 | Presence broadcast coalescing | Implemented | Join/leave snapshots are coalesced for 50 ms |
-| WebSocket origin and protocol checks | Implemented | Exact origin allowlist, 5-second auth deadline, strict command fields, text-only payloads, 4 KiB cap |
+| WebSocket origin and protocol checks | Implemented | Exact origin allowlist, 5-second auth deadline, strict command fields, text-only payloads, 8 KiB cap |
 | Controller session expiry and revocation | Implemented | HMAC role/room/instance/expiry checks; room closure and expiry close existing sockets |
 | Reconnect replay defense | Implemented | Monotonic room-scoped command IDs persist in the controller tab session |
 | Controller show lease | Implemented | A 30-second heartbeat lease pauses running output after controller loss |

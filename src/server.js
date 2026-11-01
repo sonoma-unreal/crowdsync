@@ -21,7 +21,7 @@ const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info', serializers: { req: (request) => ({ method: request.method, url: (() => { try { return new URL(request.url, 'http://localhost').pathname; } catch { return '/'; } })() }) } },
   bodyLimit: 16 * 1024,
 });
-const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
 const rooms = new Map();
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
@@ -171,7 +171,7 @@ app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store');
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
 app.get('/join/:id', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html'))); });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'show-planner.js', 'safety.js', 'styles.css']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'show-planner.js', 'keyframe-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
   return reply.type(req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8').send(await fs.readFile(path.join(publicDir, req.params.file)));
@@ -248,7 +248,7 @@ wss.on('connection', (ws) => {
   helloTimer.unref();
   const rateWindow = [];
   ws.on('message', (buffer, isBinary) => {
-    if (buffer.length > 4096) return ws.close(1009, 'Message too large');
+    if (buffer.length > 8192) return ws.close(1009, 'Message too large');
     if (isBinary) return ws.close(1003, 'Text messages required');
     let message; try { message = JSON.parse(buffer.toString()); } catch { return ws.close(1007, 'Invalid JSON'); }
     if (!message || Object.getPrototypeOf(message) !== Object.prototype || typeof message.type !== 'string') return ws.close(1008, 'Invalid message');

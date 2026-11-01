@@ -116,5 +116,5 @@ export function buildMusicPlan(analysis, { bpm, screenColor, accentColor, enhanc
   const beatMap = encodeBeatMap(beatResult.times);
   const pulseRate = normalizeTorchSettings('pulse', Math.min(1, maxRateForEffect('pulse', enhancedProtection)), enhancedProtection).rate;
   const cues = [{ at: 0, effect: 'pulse', rate: pulseRate, screenColor, accentColor, group: null }];
-  return { durationMs: analysis.durationMs, cues, beatMap, bpm: safeBpm, beatCount: beatResult.times.length, beatMode: beatResult.mode };
+  return { durationMs: analysis.durationMs, cues, beatMap, beatStyles: 'A'.repeat(beatResult.times.length), beatStyleTable: [{ effect: 'pulse', screenColor: screenColor.toLowerCase() }], bpm: safeBpm, beatCount: beatResult.times.length, beatMode: beatResult.mode };
 }

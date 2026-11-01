@@ -51,7 +51,7 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   const hostPage=await fetch(`${base}/host`);assert.equal(hostPage.status,200);const hostHtml=await hostPage.text();assert.match(hostHtml,/Start sync test/);assert.match(hostHtml,/type="module" src="\/assets\/operator\.js"/);assert.doesNotMatch(hostHtml,/fancam/i);
   const reconnectModule=await fetch(`${base}/assets/operator-connection.js`);assert.equal(reconnectModule.status,200);assert.match(reconnectModule.headers.get('content-type'),/javascript/);assert.match(await reconnectModule.text(),/classifyOperatorDisconnect/);
   const safetyModule=await fetch(`${base}/assets/safety.js`);assert.equal(safetyModule.status,200);assert.match(await safetyModule.text(),/export function sampleTorch/);
-  const icon=await fetch(`${base}/favicon.svg`);assert.equal(icon.status,200);assert.match(icon.headers.get('content-type'),/image\/svg\+xml/);
+  const icon=await fetch(`${base}/favicon.svg`);assert.equal(icon.status,200);assert.match(icon.headers.get('content-type'),/image\/svg\+xml/);for(const asset of ['keyframe-editor.js','lucide.js'])assert.equal((await fetch(`${base}/assets/${asset}`)).status,200);
   const roomA=await create(base,'Pep rally'),roomB=await create(base,'Senior night');
   assert.match(roomA.room.id,/^\d{6}$/);assert.match(roomA.url,/\/join\/\d{6}$/);assert.match(roomA.qr,/^data:image\/png;base64,/);
   const joinPage=await fetch(roomA.url);assert.equal(joinPage.status,200);const joinHtml=await joinPage.text();assert.match(joinHtml,/Photosensitivity notice/);assert.doesNotMatch(joinHtml,/fancam/i);
@@ -74,7 +74,7 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   const unjoinedClose = await once(unjoined, 'close');assert.equal(unjoinedClose[0], 1008);
   const binary = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });await once(binary,'open');binary.send(Buffer.from([1,2,3]));assert.equal((await once(binary,'close'))[0],1003);
   const malformed = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });await once(malformed,'open');malformed.send('{');assert.equal((await once(malformed,'close'))[0],1007);
-  const oversized = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });await once(oversized,'open');oversized.send('x'.repeat(4097));assert.equal((await once(oversized,'close'))[0],1009);
+  const oversized = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });await once(oversized,'open');oversized.send('x'.repeat(8193));assert.equal((await once(oversized,'close'))[0],1009);
   const flood = await connect(base,'audience',roomA.room.id);await nextMessage(flood,m=>m.type==='welcome');for(let i=0;i<201;i++)flood.send(JSON.stringify({type:'sync',clientSent:performance.now()}));assert.equal((await once(flood,'close'))[0],1008);
   const invalidCommand = await fetch(`${base}/api/operator/command`, { method: 'POST', headers: { Authorization: `Bearer ${roomA.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ command: 'torch', enabled: 'false' }) });assert.equal(invalidCommand.status,400);
   const operator=await connect(base,'operator',roomA.room.id,roomA.token);
