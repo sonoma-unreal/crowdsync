@@ -1,7 +1,58 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090909"><title>CrowdSync — Join or Host</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/styles.css"></head>
-<body class="home-page"><header class="topbar"><a class="brand" href="/"><img class="brand-icon" src="/favicon.svg" alt=""><span>Crowd<span class="brand-light">Sync</span></span></a><span class="top-tag">SYNCHRONIZED LIGHT SHOWS</span></header>
-<main class="home-shell"><div class="home-intro"><div class="eyebrow">LIGHT UP THE CROWD</div><h1>One moment.<br><em>Everyone in sync.</em></h1><p>Create a light show with friends or join one with a six-digit code.</p></div>
-<div class="home-choices"><section class="card home-card"><div class="home-icon">✦</div><div class="eyebrow">FOR THE CONTROLLER</div><h2>Host a show</h2><p>Create a show, choose light effects, run the sync test, and share the code.</p><a class="button button-primary button-large" href="/host">Host a show <span aria-hidden="true">→</span></a></section>
-<section class="card home-card"><div class="home-icon join-icon">⌁</div><div class="eyebrow">FOR THE CROWD</div><h2>Join a show</h2><p>Enter the six-digit code from your controller. You’ll sync your torch before joining.</p><form id="join-form"><label for="join-code">Six-digit show code</label><input id="join-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" required><button class="button button-secondary button-large">Join show <span aria-hidden="true">→</span></button><span id="home-error" class="home-error" role="status" aria-live="polite"></span></form></section></div>
-<p class="home-foot">Screen or torch output · Each guest opts in · Accessibility protection on by default</p></main><script src="/assets/home.js" defer></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090909">
+  <title>CrowdSync — One room. One rhythm.</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body class="home-page" data-theme="dark">
+  <header class="home-topbar">
+    <a class="brand" href="/" aria-label="CrowdSync home"><img class="brand-icon" src="/favicon.svg" alt=""><span>CrowdSync</span></a>
+    <nav class="home-nav" aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#join-show">Join a show</a></nav>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch theme"><span class="theme-glyph" aria-hidden="true">◐</span><span class="theme-label">DARK</span></button>
+  </header>
+
+  <main class="home-main">
+    <section class="home-hero" aria-labelledby="home-title">
+      <div class="home-copy">
+        <div class="home-kicker"><span class="kicker-mark"></span> SHARED LIGHT, IN REAL TIME</div>
+        <h1 id="home-title">One room.<br><span>One rhythm.</span></h1>
+        <p class="home-lede">Turn the phones in the room into one synchronized light show. Choose the look, share a code, and let everyone join in.</p>
+        <div class="home-actions"><a class="home-primary-action" href="/host"><span class="action-icon" aria-hidden="true">↗</span><span><strong>Host a show</strong><small>Set the scene and bring everyone in</small></span><span class="action-arrow" aria-hidden="true">→</span></a></div>
+        <p class="home-privacy"><span aria-hidden="true">◇</span> No app download · No camera · Guests choose screen or torch</p>
+      </div>
+
+      <div class="home-stage" aria-label="Illustration of a synchronized audience light pattern">
+        <div class="stage-topline"><span>ROOM / 001</span><span><i></i> READY TO SYNC</span></div>
+        <div class="stage-grid" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="stage-caption"><strong>EVERY PHONE, ONE MOMENT</strong><span>SCREEN + TORCH OUTPUT</span></div>
+        <div class="stage-index" aria-hidden="true">CS—01</div>
+      </div>
+    </section>
+
+    <section id="join-show" class="home-join-row" aria-labelledby="join-title">
+      <div class="join-copy"><span class="join-index">01 / AUDIENCE</span><div><h2 id="join-title">Already have a code?</h2><p>Enter the six digits from your controller. You’ll sync before joining the live show.</p></div></div>
+      <form id="join-form" class="join-form"><label class="visually-hidden" for="join-code">Six-digit show code</label><input id="join-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000 000" required aria-describedby="home-error"><button class="home-join-action" type="submit">Join room <span aria-hidden="true">→</span></button><span id="home-error" class="home-error" role="status" aria-live="polite"></span></form>
+    </section>
+
+    <section id="how-it-works" class="home-features" aria-label="How CrowdSync works">
+      <article><span>01</span><h3>Make the room</h3><p>Pick effects and colors, then share your six-digit code.</p></article>
+      <article><span>02</span><h3>Find the beat</h3><p>Guests line up with the controller in a simple sync check.</p></article>
+      <article><span>03</span><h3>Light it together</h3><p>Every phone follows the same show clock and light cues.</p></article>
+    </section>
+  </main>
+
+  <footer class="home-footer"><span>CROWDSYNC / LIVE LIGHT SYSTEM</span><span>ACCESSIBILITY PROTECTION ON BY DEFAULT</span></footer>
+  <script type="module" src="/assets/home.js"></script>
+</body>
+</html>
