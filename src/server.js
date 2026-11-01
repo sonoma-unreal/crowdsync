@@ -171,7 +171,7 @@ app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store');
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
 app.get('/join/:id', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html'))); });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'show-planner.js', 'keyframe-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'keyframe-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
   return reply.type(req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8').send(await fs.readFile(path.join(publicDir, req.params.file)));

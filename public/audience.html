@@ -10,6 +10,7 @@
 </head>
 <body class="audience-page">
   <main id="output" class="audience-output" aria-hidden="true"><div class="torch-audience-orb"></div><div id="marquee" class="audience-message" aria-live="polite" hidden></div></main>
+  <section id="immersive-gate" class="immersive-gate hidden" aria-labelledby="immersive-title" aria-modal="true" role="dialog"><div class="immersive-gate-panel"><div class="eyebrow">LIGHT OUTPUT READY</div><h1 id="immersive-title">Enter the show</h1><p>Go full screen so the light effect fills your display. Your browser may leave full screen when you leave this page.</p><button id="immersive-enter" class="button button-primary button-large" type="button">Enter full screen</button><p id="immersive-support-note" class="small-copy">Your light stays off until you choose to enter.</p></div></section>
   <header class="audience-header">
     <a class="brand" href="/"><img class="brand-icon" src="/favicon.svg" alt=""><span>Crowd<span class="brand-light">Sync</span></span></a>
     <nav id="audience-tabs" class="audience-tabs hidden" aria-label="Your show">
@@ -61,6 +62,7 @@
       <div class="eyebrow">YOUR EXPERIENCE</div><h1 id="settings-heading">Settings</h1>
       <p class="muted">Choose how your phone takes part. These choices affect only this device.</p>
       <div class="settings-option"><div><strong class="icon-label"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>Light output</strong><p id="light-mode-description" class="small-copy">Choose the screen or phone torch for this device.</p><p id="screen-mode-lock" class="small-copy hidden">The controller has set every phone to screen output.</p></div><div id="output-mode-switch" class="output-mode-switch" role="group" aria-label="Choose light output"><button id="mode-screen" type="button" aria-pressed="false">Screen</button><button id="mode-torch" type="button" aria-pressed="true">Torch flash</button></div></div>
+      <div class="settings-option"><div><strong class="icon-label">Appearance</strong><p class="small-copy">Choose a matte light or dark interface for this phone.</p></div><div class="output-mode-switch" role="group" aria-label="Choose interface theme"><button id="audience-theme-dark" type="button" aria-pressed="true">Dark</button><button id="audience-theme-light" type="button" aria-pressed="false">Light</button></div></div>
     </section>
   </main>
 
@@ -69,8 +71,8 @@
     <div><strong>The show is live</strong><p>Keep this page open. CrowdSync will keep your display awake when your browser allows it. Use Settings to choose Screen or Torch flash; tap Turn off any time.</p></div>
     <div class="live-guide-actions"><button id="guide-settings" class="button button-secondary" type="button">Settings</button><button id="dismiss-guide" class="button button-quiet" type="button">Got it</button></div>
   </aside>
-  <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button></div></footer>
+  <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button><button id="immersive-exit" class="button button-quiet hidden" type="button">Exit full screen</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/audience.js"></script>
+  <script type="module" src="/assets/audience.js"></script><script type="module" src="/assets/audience-immersive.js"></script>
 </body>
 </html>
