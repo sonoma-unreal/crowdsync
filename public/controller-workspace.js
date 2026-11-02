@@ -5,7 +5,8 @@ const THEME_KEY = 'crowdsync.controller.theme.v1';
 const PERFORMANCE_KEY = 'crowdsync.controller.performance.v1';
 const COMMUNITY_KEY = 'crowdsync.community-look-packs.v1';
 const ICONS = {
-  grip: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>',
+  minimize: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.5h10"/></svg>',
+  restore: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4z"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>',
 };
 const roots = [...document.querySelectorAll('[data-workspace-grid]')];
@@ -58,6 +59,7 @@ function saveWorkspace() {
   workspaceState = Object.fromEntries(roots.map((root) => [root.dataset.workspaceGrid, {
     order: [...root.querySelectorAll(':scope > .workspace-window')].map((node) => node.dataset.windowId),
     hidden: [...root.querySelectorAll(':scope > .workspace-window.is-hidden-window')].map((node) => node.dataset.windowId),
+    minimized: [...root.querySelectorAll(':scope > .workspace-window.is-minimized-window')].map((node) => node.dataset.windowId),
     sizes: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window[data-window-columns], :scope > .workspace-window[data-window-height]')].map((node) => [node.dataset.windowId, {
       columns: Number(node.dataset.windowColumns) || null, height: Number(node.dataset.windowHeight) || null,
     }])),
@@ -79,9 +81,10 @@ function addWindowBar(card) {
   const label = labelFor(card);
   const bar = document.createElement('div');
   bar.className = 'workspace-windowbar';
-  bar.innerHTML = `<button class="workspace-drag-handle" type="button" aria-label="Drag ${label}">${ICONS.grip}</button><span class="workspace-window-title"></span><button class="workspace-hide" type="button" aria-label="Hide ${label}" title="Hide window">${ICONS.close}</button>`;
+  bar.innerHTML = `<span class="workspace-window-title"></span><div class="workspace-window-controls"><button class="workspace-minimize" type="button" aria-label="Minimize ${label}" aria-expanded="true" title="Minimize">${ICONS.minimize}</button><button class="workspace-hide" type="button" aria-label="Close ${label}" title="Close window">${ICONS.close}</button></div>`;
   bar.querySelector('.workspace-window-title').textContent = label;
-  bar.querySelector('.workspace-drag-handle').addEventListener('pointerdown', startDrag);
+  bar.addEventListener('pointerdown', startDrag);
+  bar.querySelector('.workspace-minimize').addEventListener('click', () => toggleMinimize(card));
   bar.querySelector('.workspace-hide').addEventListener('click', () => hideWindow(card));
   card.prepend(bar);
   const resizeHandle = document.createElement('button');
@@ -132,6 +135,10 @@ function setupRoots() {
       ordered.forEach((card) => root.append(card));
     }
     for (const id of saved?.hidden || []) root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`)?.classList.add('is-hidden-window');
+    for (const id of saved?.minimized || []) {
+      const card = root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`);
+      if (card) { card.classList.add('is-minimized-window'); updateMinimizeControl(card, true); }
+    }
     for (const [id, size] of Object.entries(saved?.sizes || {})) {
       const card = root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`);
       if (!card) continue;
@@ -184,7 +191,7 @@ function animateReflow(root, before) {
   });
 }
 function startDrag(event) {
-  if (event.button !== 0 || !event.isPrimary || resizeState || draggedWindow) return;
+  if (event.button !== 0 || !event.isPrimary || event.target.closest('button') || resizeState || draggedWindow) return;
   const card = event.currentTarget.closest('.workspace-window');
   if (!card) return;
   event.preventDefault(); movingWindow = card;
@@ -283,10 +290,26 @@ function cancelWorkspaceGesture() {
   if (resizeState) endResize();
 }
 function hideWindow(card) {
-  card.classList.add('is-hidden-window'); contextMenu.classList.add('hidden'); saveWorkspace();
+  card.classList.remove('is-minimized-window'); updateMinimizeControl(card, false); card.classList.add('is-hidden-window'); contextMenu.classList.add('hidden'); saveWorkspace();
+}
+function updateMinimizeControl(card, minimized) {
+  const button = card.querySelector('.workspace-minimize');
+  if (!button) return;
+  const label = card.dataset.windowLabel;
+  button.setAttribute('aria-label', `${minimized ? 'Restore' : 'Minimize'} ${label}`);
+  button.setAttribute('aria-expanded', String(!minimized));
+  button.title = minimized ? 'Restore window' : 'Minimize';
+  button.innerHTML = minimized ? ICONS.restore : ICONS.minimize;
+}
+function toggleMinimize(card) {
+  const minimized = card.classList.toggle('is-minimized-window');
+  updateMinimizeControl(card, minimized);
+  saveWorkspace();
 }
 function restoreWindows() {
-  document.querySelectorAll('.is-hidden-window').forEach((node) => node.classList.remove('is-hidden-window'));
+  document.querySelectorAll('.is-hidden-window,.is-minimized-window').forEach((node) => {
+    node.classList.remove('is-hidden-window', 'is-minimized-window'); updateMinimizeControl(node, false);
+  });
   contextMenu.classList.add('hidden'); saveWorkspace();
 }
 function renderWindowSettings() {
@@ -332,6 +355,8 @@ preferenceDialog.querySelector('.reset-layout').addEventListener('click', () => 
     for (const id of defaultOrders.get(root.dataset.workspaceGrid) || []) if (byId.has(id)) root.append(byId.get(id));
     for (const node of byId.values()) {
       node.classList.toggle('is-hidden-window', (defaultHidden.get(root.dataset.workspaceGrid) || []).includes(node.dataset.windowId));
+      node.classList.remove('is-minimized-window');
+      updateMinimizeControl(node, false);
       node.classList.remove('is-resized-window'); node.removeAttribute('data-window-columns'); node.removeAttribute('data-window-height');
       node.style.removeProperty('--window-columns'); node.style.removeProperty('--window-height');
     }
@@ -352,7 +377,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) cance
 function openWorkspaceWindow(id) {
   const card = document.querySelector(`.workspace-window[data-window-id="${CSS.escape(id)}"]`);
   if (!card) return;
-  card.classList.remove('is-hidden-window');
+  card.classList.remove('is-hidden-window', 'is-minimized-window');
   const root = card.closest('[data-workspace-grid]');
   const step = root?.dataset.workspaceGrid;
   if (step) document.querySelector(`[data-step="${CSS.escape(step)}"]`)?.click();
