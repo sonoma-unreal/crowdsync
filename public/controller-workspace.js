@@ -31,7 +31,7 @@ document.body.append(addWindowButton);
 const addWindowDialog = document.createElement('dialog');
 addWindowDialog.className = 'add-window-dialog';
 addWindowDialog.setAttribute('aria-labelledby', 'add-window-title');
-addWindowDialog.innerHTML = '<header><div><div class="eyebrow">WORKSPACE</div><h2 id="add-window-title">Add a window</h2></div><button class="square-icon" value="close" formmethod="dialog" aria-label="Close window picker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p>Open a panel in its workspace. Drag it to snap, resize from its lower corner, or hide it with right-click.</p><div class="add-window-options"><button type="button" data-add-window="sync-check"><strong>Sync check</strong><small>Manage the audience timing test.</small></button><button type="button" data-add-window="join-code"><strong>Room code &amp; QR</strong><small>Share the room with guests.</small></button><button type="button" data-add-window="effect-library"><strong>Effects library</strong><small>Choose and preview built-in looks.</small></button><button type="button" data-add-window="community-effects"><strong>Community look packs</strong><small>Import a safety-bounded JSON pack locally.</small></button><button type="button" data-add-window="cue-sheet"><strong>Songs &amp; beat cues</strong><small>Upload local audio and edit detected beats.</small></button><button type="button" data-add-window="crowd-preview"><strong>Audience preview</strong><small>Preview the selected show output.</small></button><button type="button" data-add-window="show-controls"><strong>Live controls</strong><small>Transport, output and audience messaging.</small></button><button type="button" data-add-window="show-activity"><strong>Show activity</strong><small>Recent room events and connection status.</small></button></div><small class="add-window-footnote">Look packs stay on this browser. CrowdSync does not host a community upload service.</small>';
+addWindowDialog.innerHTML = '<header><div><div class="eyebrow">WORKSPACE</div><h2 id="add-window-title">Add a window</h2></div><button class="square-icon" value="close" formmethod="dialog" aria-label="Close window picker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p>Drag a title bar to snap windows into place. Hold Shift while dragging to place a window freely over the canvas and other windows. Resize from a lower corner or hide a window with right-click.</p><div class="add-window-options"><button type="button" data-add-window="sync-check"><strong>Sync check</strong><small>Manage the audience timing test.</small></button><button type="button" data-add-window="join-code"><strong>Room code &amp; QR</strong><small>Share the room with guests.</small></button><button type="button" data-add-window="effect-library"><strong>Effects library</strong><small>Choose and preview built-in looks.</small></button><button type="button" data-add-window="community-effects"><strong>Community look packs</strong><small>Import a safety-bounded JSON pack locally.</small></button><button type="button" data-add-window="cue-sheet"><strong>Songs &amp; beat cues</strong><small>Upload local audio and edit detected beats.</small></button><button type="button" data-add-window="crowd-preview"><strong>Audience preview</strong><small>Preview the selected show output.</small></button><button type="button" data-add-window="show-controls"><strong>Live controls</strong><small>Transport, output and audience messaging.</small></button><button type="button" data-add-window="show-activity"><strong>Show activity</strong><small>Recent room events and connection status.</small></button></div><small class="add-window-footnote">Look packs stay on this browser. CrowdSync does not host a community upload service.</small>';
 document.body.append(addWindowDialog);
 const consoleView = document.querySelector('#console');
 function updateAddButtonVisibility() { addWindowButton.classList.toggle('hidden', !!consoleView?.classList.contains('hidden')); }
@@ -60,6 +60,9 @@ function saveWorkspace() {
     order: [...root.querySelectorAll(':scope > .workspace-window')].map((node) => node.dataset.windowId),
     hidden: [...root.querySelectorAll(':scope > .workspace-window.is-hidden-window')].map((node) => node.dataset.windowId),
     minimized: [...root.querySelectorAll(':scope > .workspace-window.is-minimized-window')].map((node) => node.dataset.windowId),
+    free: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window.is-free-window')].map((node) => [node.dataset.windowId, {
+      x: Number(node.dataset.freeX) || 0, y: Number(node.dataset.freeY) || 0, width: Number(node.dataset.freeWidth) || node.getBoundingClientRect().width,
+    }])),
     sizes: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window[data-window-columns], :scope > .workspace-window[data-window-height]')].map((node) => [node.dataset.windowId, {
       columns: Number(node.dataset.windowColumns) || null, height: Number(node.dataset.windowHeight) || null,
     }])),
@@ -81,6 +84,7 @@ function addWindowBar(card) {
   const label = labelFor(card);
   const bar = document.createElement('div');
   bar.className = 'workspace-windowbar';
+  bar.title = 'Drag to snap · hold Shift to place freely over other windows';
   bar.innerHTML = `<span class="workspace-window-title"></span><div class="workspace-window-controls"><button class="workspace-minimize" type="button" aria-label="Minimize ${label}" aria-expanded="true" title="Minimize">${ICONS.minimize}</button><button class="workspace-hide" type="button" aria-label="Close ${label}" title="Close window">${ICONS.close}</button></div>`;
   bar.querySelector('.workspace-window-title').textContent = label;
   bar.addEventListener('pointerdown', startDrag);
@@ -114,6 +118,10 @@ function setupRoots() {
       card.dataset.workspaceReady = 'true';
       addWindowBar(card);
       if (root.dataset.workspaceGrid === 'show' && card.parentElement !== root) root.append(card);
+      card.addEventListener('pointerdown', () => {
+        if (!card.classList.contains('is-free-window') || card.parentElement !== root) return;
+        root.append(card); saveWorkspace();
+      });
       card.addEventListener('contextmenu', (event) => {
         if (event.target.closest('input,textarea,select,button,a,[contenteditable="true"]')) return;
         event.preventDefault(); activeMenuWindow = card;
@@ -145,6 +153,11 @@ function setupRoots() {
       if (Number.isInteger(size.columns) && size.columns >= 2 && size.columns <= 12) setWindowColumns(card, size.columns);
       if (Number.isInteger(size.height) && size.height >= 180 && size.height <= 1000) setWindowHeight(card, size.height);
     }
+    for (const [id, position] of Object.entries(saved?.free || {})) {
+      const card = root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`);
+      if (!card || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) continue;
+      setFreePosition(card, Math.max(0, position.x), Math.max(0, position.y), Math.max(280, Number(position.width) || card.getBoundingClientRect().width));
+    }
   }
   saveWorkspace();
 }
@@ -168,6 +181,16 @@ function setWindowColumns(card, columns) {
 function setWindowHeight(card, height) {
   card.dataset.windowHeight = String(height);
   card.style.setProperty('--window-height', `${height}px`);
+}
+function setFreePosition(card, x, y, width) {
+  card.classList.add('is-free-window');
+  card.dataset.freeX = String(Math.round(x)); card.dataset.freeY = String(Math.round(y)); card.dataset.freeWidth = String(Math.round(width));
+  card.style.setProperty('--free-left', `${Math.round(x)}px`); card.style.setProperty('--free-top', `${Math.round(y)}px`); card.style.setProperty('--free-width', `${Math.round(width)}px`);
+}
+function clearFreePosition(card) {
+  card.classList.remove('is-free-window');
+  for (const key of ['freeX','freeY','freeWidth']) delete card.dataset[key];
+  for (const property of ['--free-left','--free-top','--free-width']) card.style.removeProperty(property);
 }
 function captureLayout(root) {
   return new Map([...root.querySelectorAll(':scope > .workspace-window:not(.is-hidden-window)')].map((node) => [node, node.getBoundingClientRect()]));
@@ -218,7 +241,8 @@ function startResize(event) {
 function resizeMove(event) {
   if (!resizeState || event.pointerId !== resizeState.id) return;
   const { card, root, x, y, width, height, columns, columnWidth } = resizeState;
-  if (innerWidth > 860) setWindowColumns(card, Math.max(2, Math.min(12, columns + Math.round((event.clientX - x) / Math.max(1, columnWidth)))));
+  if (card.classList.contains('is-free-window')) setFreePosition(card, Number(card.dataset.freeX) || 0, Number(card.dataset.freeY) || 0, Math.max(280, Math.min(root.clientWidth - (Number(card.dataset.freeX) || 0), width + event.clientX - x)));
+  else if (innerWidth > 860) setWindowColumns(card, Math.max(2, Math.min(12, columns + Math.round((event.clientX - x) / Math.max(1, columnWidth)))));
   setWindowHeight(card, Math.max(190, Math.min(1000, Math.round(height + event.clientY - y))));
   root.classList.add('is-resizing');
 }
@@ -246,6 +270,7 @@ function dragMove(event) {
     dragSlot = document.createElement('div'); dragSlot.className = 'workspace-snap-slot';
     dragSlot.style.gridColumn = getComputedStyle(draggedWindow).gridColumn; dragSlot.style.height = `${rect.height}px`;
     root.insertBefore(dragSlot, draggedWindow);
+    draggedWindow.classList.remove('is-free-window');
     document.body.append(draggedWindow);
     draggedWindow.classList.add('is-dragging-window');
     Object.assign(draggedWindow.style, { position: 'fixed', zIndex: '1000', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, margin: '0', pointerEvents: 'none', overflow: 'hidden' });
@@ -254,10 +279,11 @@ function dragMove(event) {
   if (!draggedWindow) return;
   const root = dragSlot?.parentElement;
   if (!root) return;
+  root.classList.toggle('is-free-dragging', event.shiftKey);
   draggedWindow.style.left = `${event.clientX - pointerOrigin.grabX}px`;
   draggedWindow.style.top = `${event.clientY - pointerOrigin.grabY}px`;
   updateDragField({ currentTarget: root, clientX: event.clientX, clientY: event.clientY });
-  const candidate = targetAtPoint(root, event.clientX, event.clientY);
+  const candidate = event.shiftKey ? null : targetAtPoint(root, event.clientX, event.clientY);
   if (candidate !== snapTarget) { snapTarget?.classList.remove('workspace-snap-preview'); snapTarget = candidate; snapTarget?.classList.add('workspace-snap-preview'); }
   if (!candidate) return;
   const rect = candidate.getBoundingClientRect(), horizontal = Math.abs(event.clientX - (rect.left + rect.width / 2)) > Math.abs(event.clientY - (rect.top + rect.height / 2));
@@ -269,17 +295,27 @@ function dragMove(event) {
     animateReflow(root, old);
   }
 }
-function endDrag() {
+function endDrag(event) {
   document.removeEventListener('pointermove', dragMove);
   document.removeEventListener('pointerup', endDrag); document.removeEventListener('pointercancel', endDrag);
   if (draggedWindow) {
     const root = dragSlot?.parentElement, before = root ? captureLayout(root) : new Map();
     snapTarget?.classList.remove('workspace-snap-preview'); snapTarget = null;
+    const freeDrop = !!(event?.shiftKey && root);
+    const freeRect = freeDrop ? draggedWindow.getBoundingClientRect() : null;
+    const rootRect = freeDrop ? root.getBoundingClientRect() : null;
     for (const prop of ['position','zIndex','left','top','width','height','margin','pointerEvents','overflow']) draggedWindow.style.removeProperty(prop.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`));
     draggedWindow.classList.remove('is-dragging-window');
-    if (dragSlot?.parentElement) dragSlot.replaceWith(draggedWindow);
+    if (freeDrop) {
+      dragSlot?.remove(); root.append(draggedWindow);
+      setFreePosition(draggedWindow, freeRect.left - rootRect.left - root.clientLeft + root.scrollLeft, freeRect.top - rootRect.top - root.clientTop + root.scrollTop, freeRect.width);
+    } else {
+      clearFreePosition(draggedWindow);
+      if (dragSlot?.parentElement) dragSlot.replaceWith(draggedWindow);
+    }
     const droppedWindow = draggedWindow; droppedWindow.classList.add('is-dropping-window'); setTimeout(() => droppedWindow.classList.remove('is-dropping-window'), 280);
     root?.classList.remove('is-dragging');
+    root?.classList.remove('is-free-dragging');
     if (root) animateReflow(root, before);
     saveWorkspace();
   }
@@ -359,6 +395,7 @@ preferenceDialog.querySelector('.reset-layout').addEventListener('click', () => 
       updateMinimizeControl(node, false);
       node.classList.remove('is-resized-window'); node.removeAttribute('data-window-columns'); node.removeAttribute('data-window-height');
       node.style.removeProperty('--window-columns'); node.style.removeProperty('--window-height');
+      clearFreePosition(node);
     }
   }
   try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(THEME_KEY); localStorage.removeItem(PERFORMANCE_KEY); } catch {}

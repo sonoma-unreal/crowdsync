@@ -166,6 +166,14 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline-color:#c9c7bf}.
 .workspace-window.is-minimized-window .workspace-resize-handle{display:none}
 @media(max-width:600px){.workspace-windowbar{height:25px;min-height:25px;margin:-14px -14px 12px;padding-left:10px}.workspace-minimize,.workspace-hide{width:34px;height:24px}}
 
+/* Give the show desk a roomy, persistent canvas for free window placement. */
+.show-workspace{min-height:max(145vh,1320px);align-content:start;padding:12px;border:1px solid var(--desk-line);background-color:color-mix(in srgb,var(--desk-bg) 92%,var(--desk-panel));background-image:linear-gradient(color-mix(in srgb,var(--desk-line) 24%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--desk-line) 24%,transparent) 1px,transparent 1px);background-size:32px 32px;background-position:-1px -1px}
+.workspace-window.is-free-window{position:absolute!important;left:var(--free-left);top:var(--free-top);width:min(var(--free-width),100%);grid-column:auto!important;z-index:2;margin:0!important;box-shadow:0 14px 38px #0008}
+.workspace-window.is-free-window:hover{z-index:3}
+.workspace-grid.is-free-dragging:after{content:"FREE PLACEMENT · SHIFT";position:absolute;z-index:5;top:10px;right:12px;padding:6px 8px;border:1px solid var(--desk-line);background:var(--desk-panel);color:var(--desk-muted);font:8px var(--mono);letter-spacing:.55px;pointer-events:none}
+@media(max-width:860px){.show-workspace{min-height:max(120vh,1000px);padding:8px}}
+@media(max-width:600px){.show-workspace{min-height:calc(100svh + 520px);padding:6px}.workspace-window.is-free-window{width:min(var(--free-width),calc(100% - 12px))}}
+
 /* Keep palette swatches and names in separate, predictable columns. */
 .operator-page .palette-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:5px}
 .operator-page .palette-presets button{min-width:0;width:100%;justify-content:flex-start;gap:0;padding:7px 6px 7px 30px;white-space:nowrap;font-size:9px}
