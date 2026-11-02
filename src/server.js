@@ -146,7 +146,7 @@ function applyCommand(room, message) {
     if (!/^#[\da-f]{6}$/i.test(screenColor) || !/^#[\da-f]{6}$/i.test(accentColor)) return { error: 'Screen colors must be six-digit hex values' };
     room.screenColor = screenColor.toLowerCase(); room.accentColor = accentColor.toLowerCase();
   } else if (cmd === 'show-plan') {
-    if (room.status === 'running') return { error: 'Pause or stop the show before changing its cue sheet' };
+    if (room.status === 'running') return { error: 'The active score stays locked during a live show; edit its local draft for the next start' };
     const result = normalizeShowPlan(message.plan, room.enhancedProtection);
     if (!result.ok) return { error: result.error };
     if (result.plan?.cues.some((cue) => cue.group !== null && cue.group >= room.groups.length)) return { error: 'A cue targets a section that is not configured for this room' };

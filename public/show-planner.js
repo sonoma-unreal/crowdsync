@@ -109,12 +109,51 @@ export function encodeBeatMap(beatTimes) {
   return encoded;
 }
 
+// Build a small, deterministic style vocabulary from the track envelope.
+// Energy selects the movement; beat strength and local dynamics select color.
+const MOOD_STYLES = ['beacon', 'ripple', 'wave', 'pulse', 'chase', 'crescendo', 'sparkle', 'march'];
+const STYLE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+function blendColor(first, second, amount) {
+  const a = first.match(/[\da-f]{2}/gi)?.map((value) => parseInt(value, 16)) || [0, 0, 0];
+  const b = second.match(/[\da-f]{2}/gi)?.map((value) => parseInt(value, 16)) || [255, 255, 255];
+  return `#${a.map((value, index) => Math.round(value + (b[index] - value) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
+
 export function buildMusicPlan(analysis, { bpm, screenColor, accentColor, enhancedProtection = true } = {}) {
   if (!analysis || !Number.isFinite(analysis.durationMs) || !Array.isArray(analysis.envelope)) throw new Error('Analyze a track before building its light score');
   const safeBpm = clamp(Math.round(Number(bpm) || analysis.bpm || 120), 60, 180);
   const beatResult = detectBeatTimes({ ...analysis, bpm: safeBpm });
   const beatMap = encodeBeatMap(beatResult.times);
   const pulseRate = normalizeTorchSettings('pulse', Math.min(1, maxRateForEffect('pulse', enhancedProtection)), enhancedProtection).rate;
-  const cues = [{ at: 0, effect: 'pulse', rate: pulseRate, screenColor, accentColor, group: null }];
-  return { durationMs: analysis.durationMs, cues, beatMap, beatStyles: 'A'.repeat(beatResult.times.length), beatStyleTable: [{ effect: 'pulse', screenColor: screenColor.toLowerCase() }], bpm: safeBpm, beatCount: beatResult.times.length, beatMode: beatResult.mode };
+  const envelope = analysis.envelope.map((value) => Math.max(0, Number(value) || 0));
+  const sorted = [...envelope].sort((a, b) => a - b);
+  const percentile = (fraction) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] || 0;
+  const low = percentile(0.12), high = Math.max(low + 1e-6, percentile(0.92));
+  const styleTable = [];
+  const styleIndexes = new Map();
+  const styleCodes = [];
+  const cues = [{ at: 0, effect: 'pulse', rate: pulseRate, screenColor: screenColor.toLowerCase(), accentColor: accentColor.toLowerCase(), group: null }];
+  for (let i = 0; i < beatResult.times.length; i++) {
+    const at = beatResult.times[i];
+    const frame = Math.max(0, Math.min(envelope.length - 1, Math.floor(at / (analysis.frameMs || 50))));
+    const windowFrames = Math.max(1, Math.round((60_000 / safeBpm) / (analysis.frameMs || 50)));
+    const from = Math.max(0, frame - Math.floor(windowFrames * 0.22));
+    const to = Math.min(envelope.length, frame + Math.max(2, Math.floor(windowFrames * 0.52)));
+    const local = envelope.slice(from, to);
+    const energy = local.reduce((sum, value) => sum + value, 0) / Math.max(1, local.length);
+    const beat = envelope[frame] || 0;
+    const intensity = clamp((energy - low) / (high - low), 0, 0.999);
+    const transient = clamp((beat - energy) / Math.max(high - low, 1e-6), 0, 1);
+    const styleIndex = Math.min(MOOD_STYLES.length - 1, Math.floor(intensity * MOOD_STYLES.length));
+    const style = { effect: MOOD_STYLES[styleIndex], screenColor: blendColor(screenColor, accentColor, clamp(intensity + transient * 0.2, 0, 1)) };
+    const key = `${style.effect}|${style.screenColor}`;
+    if (!styleIndexes.has(key)) {
+      if (styleTable.length < 32) {
+        styleIndexes.set(key, styleTable.length);
+        styleTable.push(style);
+      } else styleIndexes.set(key, 0);
+    }
+    styleCodes.push(STYLE_ALPHABET[styleIndexes.get(key)] || 'A');
+  }
+  return { durationMs: analysis.durationMs, cues, beatMap, beatStyles: styleCodes.join(''), beatStyleTable: styleTable.length ? styleTable : [{ effect: 'pulse', screenColor: screenColor.toLowerCase() }], bpm: safeBpm, beatCount: beatResult.times.length, beatMode: beatResult.mode };
 }
