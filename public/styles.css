@@ -366,3 +366,60 @@ body{font-family:var(--font);font-weight:400;font-synthesis:none}
 .operator-page .controller-preferences .ui-icon{display:block;width:18px;height:18px;margin:0}
 .operator-page .desk-pane-heading>.eyebrow,.operator-page .desk-pane-heading>div>.eyebrow{display:none}
 @media(max-width:600px){.operator-page .operator-shell{width:100%;padding:14px 10px 30px}.operator-page .operator-topbar{padding-inline:10px}.operator-page .show-workspace{width:100%;margin-left:0}}
+
+/* Matte neutral UI chrome. Light colors chosen by hosts for show output stay untouched. */
+:root{--bg:#090909;--panel:#141413;--panel2:#1d1d1b;--line:#30302e;--text:#f2f1ec;--muted:#a7a59d;--blue:#c9c7bf;--cyan:#a7a59d}
+.operator-page,.audience-page{--blue:#c9c7bf;--cyan:#a7a59d;--muted:#a7a59d}
+.operator-page .eyebrow,.operator-page .join-link{color:#c9c7bf}
+.operator-page .desk-steps{border-color:#30302e;background:#10100f}
+.operator-page .desk-step{color:#a7a59d}
+.operator-page .desk-step span{background:#292927;color:#c9c7bf}
+.operator-page .desk-step.selected{background:#c9c7bf;color:#11110f}
+.operator-page .desk-step.selected span{background:#11110f;color:#e9e7e0}
+.operator-page .desk-status{border-color:#30302e;background:#30302e}
+.operator-page .desk-status>div{background:#141413}
+.operator-page .desk-label{color:#a7a59d}
+.operator-page .desk-status strong{color:#e3e1da}
+.operator-page .crowd-preview{border-color:#30302e;background:#0b0b0a}
+.operator-page .crowd-cell:not(.lit){background:#1b1b19}
+.operator-page .preview-effect-name{color:#c9c7bf}
+.operator-page .crowd-preview-foot{color:#a7a59d}
+.operator-page .crowd-preview.sync-flash .crowd-cell{background:#e7e5de;box-shadow:0 0 12px #e7e5de}
+.operator-page .effect-button:not(.selected),.operator-page .energy-presets button:not(.selected),.operator-page .palette-presets button{border-color:#30302e;background:#1b1b19;color:#e3e1da}
+.operator-page .effect-button.selected,.operator-page .energy-presets button.selected{border-color:#c9c7bf;background:#c9c7bf;color:#11110f}
+.operator-page .energy-presets button small{color:#a7a59d}
+.operator-page .energy-presets button.selected small{color:#33332f}
+.operator-page .palette-presets button.selected{border-color:#c9c7bf;box-shadow:0 0 0 1px #c9c7bf55}
+.operator-page :is(input,select,textarea),.audience-page :is(input,select,textarea){accent-color:#c9c7bf}
+.operator-page :is(input,select,textarea):focus-visible,.audience-page :is(input,select,textarea):focus-visible{outline-color:#c9c7bf}
+.operator-page .sync-panel,.audience-page .sync-panel{border-color:#30302e;background:#141413}
+.operator-page .sync-panel strong,.audience-page .sync-panel strong{color:#e3e1da}
+.operator-page .sync-rail,.audience-page .sync-rail{border-color:#353531;background:linear-gradient(90deg,#090908,#191918,#090908)}
+.operator-page .sync-rail:after,.audience-page .sync-rail:after{background:#c9c7bf;box-shadow:0 0 12px #c9c7bf}
+.operator-page .sync-target,.audience-page .sync-target{border-color:#a7a59d}
+.operator-page .sync-marker,.audience-page .sync-marker{background:#c9c7bf;box-shadow:0 0 10px #c9c7bf}
+.operator-page .offset-label,.audience-page .offset-label,.operator-page .offset-control input,.audience-page .offset-control input{color:#c9c7bf;accent-color:#c9c7bf}
+.operator-page .audience-groups,.audience-page .audience-groups{border-color:#30302e;background:#141413}
+.operator-page .audience-group-option,.audience-page .audience-group-option{border-color:#30302e;background:#1b1b19;color:#e3e1da}
+.operator-page .audience-group-option:has(input:checked),.audience-page .audience-group-option:has(input:checked){border-color:#c9c7bf;background:#242421}
+.operator-page .workspace-snap-slot{border-color:#8e8c84;background:#ffffff08;box-shadow:inset 0 0 26px #ffffff08}
+.operator-page .workspace-snap-preview{outline-color:#aaa79e;filter:drop-shadow(0 0 12px #d4d1c822)}
+.operator-page .workspace-grid:before{background-image:linear-gradient(#ffffff09 1px,transparent 1px),linear-gradient(90deg,#ffffff09 1px,transparent 1px)}
+.operator-page .live-guide{border-color:#30302e;background:#141413}
+.operator-page .live-guide strong{color:#e3e1da}
+.operator-page .preview-mode-switch button,.operator-page .cue-move,.operator-page .cue-remove,.operator-page .saved-show-row{border-color:#30302e;background:#1b1b19;color:#dedcd5}
+.operator-page .preview-mode-switch button.selected{border-color:#c9c7bf;background:#2a2a27;color:#f1f0eb}
+.operator-page .ready-chip{border-color:#30302e;background:#141413;color:#c9c7bf}
+.operator-page .button-primary{border-color:#d4d1c8;background:#d4d1c8;color:#11110f}
+.operator-page .button-secondary{border-color:#383835;background:#20201e;color:#e6e4dd}
+.audience-page .audience-tabs{border-color:#30302e;background:#141413}
+.audience-page .audience-tab{color:#c9c7bf}
+.audience-page .audience-tab.selected{background:#c9c7bf;color:#11110f}
+.audience-page .settings-card{border-color:#30302e;background:linear-gradient(145deg,#191918,#111110)}
+.audience-page .settings-option{border-color:#30302e;background:#141413}
+.audience-page .settings-option .ui-icon{color:#c9c7bf}
+.audience-page input[type=color]{border-color:#383835;background:#141413}
+.audience-page .ready-chip{border-color:#30302e;background:#141413;color:#c9c7bf}
+.audience-page .button-primary{border-color:#d4d1c8;background:#d4d1c8;color:#11110f}
+.audience-page .button-secondary{border-color:#383835;background:#20201e;color:#e6e4dd}
+.operator-page .controller-preferences .ui-icon{transform:translateY(1px)}
