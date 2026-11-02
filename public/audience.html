@@ -41,6 +41,8 @@
       <div class="sync-rail" aria-label="Sync timing indicator"><span class="sync-target"></span><span id="sync-marker" class="sync-marker"></span></div>
       <p id="offset-label" class="offset-label">Light offset: 0 ms</p>
       <section id="audience-groups" class="audience-groups hidden" aria-labelledby="audience-group-title"><strong id="audience-group-title">Choose your section</strong><p class="small-copy">Your choice only controls which parts of the light score your phone follows.</p><div id="audience-group-options" class="audience-group-options"></div></section>
+      <div class="sync-network-row"><button id="auto-sync" class="button button-secondary" type="button" disabled>Auto sync</button><span id="sync-network-status" role="status" aria-live="polite">Checking room clock…</span></div>
+      <p class="sync-network-help">Auto sync pings the controller and aligns this phone to the room clock. Use the timing buttons below for device-specific light delay.</p>
       <div class="offset-control" role="group" aria-label="Adjust light timing">
         <span>Adjust light timing</span>
         <div class="offset-buttons">
@@ -76,6 +78,6 @@
   </aside>
   <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button><button id="immersive-exit" class="button button-quiet hidden" type="button">Exit full screen</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/audience.js?v=join-preflight-2"></script><script type="module" src="/assets/audience-immersive.js"></script>
+  <script type="module" src="/assets/audience.js?v=controller-sync-auto-1"></script><script type="module" src="/assets/audience-immersive.js?v=controller-sync-auto-1"></script>
 </body>
 </html>

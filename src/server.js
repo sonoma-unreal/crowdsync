@@ -218,7 +218,7 @@ app.post('/api/rooms', async (req, reply) => {
   if (!name) return reply.code(400).send({ error: 'Enter a show name' });
   let id;
   do { id = String(crypto.randomInt(100000, 1000000)); } while (rooms.has(id));
-  const room = { id, instance: crypto.randomUUID(), name, status: 'idle', effect: 'pulse', rate: 1.2, enhancedProtection: true, torchEnabled: false, screenMode: false, screenColor: '#25c3e8', accentColor: '#a855f7', startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0, expiresAt: Date.now() + 12 * 60 * 60 * 1000, audience: new Set(), waiting: new Set(), operators: new Set(), audienceIndex: 0, groups: [], syncTest: { active: false, completed: false, testId: 0, startedAt: 0 }, marquee: '', showPlan: null };
+  const room = { id, instance: crypto.randomUUID(), name, status: 'idle', effect: 'pulse', rate: 1.2, enhancedProtection: true, torchEnabled: false, screenMode: false, screenColor: '#25c3e8', accentColor: '#a855f7', startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0, expiresAt: Date.now() + 12 * 60 * 60 * 1000, audience: new Set(), waiting: new Set(), operators: new Set(), clockProbes: new Map(), audienceIndex: 0, groups: [], syncTest: { active: false, completed: false, testId: 0, startedAt: 0 }, marquee: '', showPlan: null };
   rooms.set(id, room);
   const token = issueToken({ role: 'operator', room: id, instance: room.instance });
   const url = joinUrl(id, req);
@@ -293,6 +293,24 @@ wss.on('connection', (ws) => {
       if (!ws.role || Object.keys(message).some((key) => !['type', 'clientSent'].includes(key)) || !Number.isFinite(message.clientSent) || message.clientSent < 0 || message.clientSent > Number.MAX_SAFE_INTEGER) return ws.close(1008, 'Invalid sync message');
       const serverReceived = serverNow(); send(ws, { type: 'sync', clientSent: message.clientSent, serverReceived, serverSent: serverNow() }); return;
     }
+    if (message.type === 'controller-ping') {
+      if (ws.role !== 'audience' || Object.keys(message).some((key) => !['type', 'probeId', 'clientSent'].includes(key)) || typeof message.probeId !== 'string' || !/^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(message.probeId) || !Number.isFinite(message.clientSent) || message.clientSent < 0 || message.clientSent > Number.MAX_SAFE_INTEGER) return ws.close(1008, 'Invalid controller ping');
+      const room = ws.room, now = Date.now();
+      for (const [id, probe] of room.clockProbes) if (probe.expiresAt <= now || probe.audience.readyState !== WebSocket.OPEN || probe.operator.readyState !== WebSocket.OPEN) room.clockProbes.delete(id);
+      const operator = [...room.operators].reverse().find((candidate) => candidate.readyState === WebSocket.OPEN && candidate.claims?.exp > now);
+      if (!operator || room.clockProbes.size >= 32) { send(ws, { type: 'controller-pong', probeId: message.probeId, unavailable: true }); return; }
+      room.clockProbes.set(message.probeId, { audience: ws, operator, clientSent: message.clientSent, expiresAt: now + 2500 });
+      send(operator, { type: 'controller-ping', probeId: message.probeId }); return;
+    }
+    if (message.type === 'controller-pong') {
+      if (ws.role !== 'operator' || Object.keys(message).some((key) => !['type', 'probeId', 'controllerReceived', 'controllerSent'].includes(key)) || typeof message.probeId !== 'string' || !/^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(message.probeId) || !Number.isFinite(message.controllerReceived) || !Number.isFinite(message.controllerSent) || message.controllerReceived < 0 || message.controllerSent < message.controllerReceived || message.controllerSent - message.controllerReceived > 1000 || message.controllerSent > Number.MAX_SAFE_INTEGER) return ws.close(1008, 'Invalid controller pong');
+      const probe = ws.room.clockProbes.get(message.probeId);
+      if (!probe) return;
+      if (probe.operator !== ws) return;
+      if (probe.expiresAt <= Date.now() || probe.audience.readyState !== WebSocket.OPEN) { ws.room.clockProbes.delete(message.probeId); return; }
+      ws.room.clockProbes.delete(message.probeId);
+      send(probe.audience, { type: 'controller-pong', probeId: message.probeId, clientSent: probe.clientSent, controllerReceived: message.controllerReceived, controllerSent: message.controllerSent }); return;
+    }
     if (message.type === 'heartbeat') {
       if (ws.role !== 'operator' || Object.keys(message).length !== 1) return ws.close(1008, 'Invalid heartbeat');
       ws.room.lastOperatorHeartbeat = now; send(ws, { type: 'heartbeat', serverNow: serverNow() }); return;
@@ -354,6 +372,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     clearTimeout(helloTimer);
     if (ws.room && ws.role) {
+      for (const [id, probe] of ws.room.clockProbes) if (probe.audience === ws || probe.operator === ws) ws.room.clockProbes.delete(id);
       if (ws.role === 'operator') ws.room.operators.delete(ws);
       else { ws.room.waiting.delete(ws); ws.room.audience.delete(ws); }
       publishPresence(ws.room);

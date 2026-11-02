@@ -130,6 +130,24 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   for(const ws of [audience,late,operator])ws.close();
 });
 
+test('audience auto-sync probes relay only through their room controller', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`;
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,NODE_ENV:'test'},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const roomA=await create(base,'Controller clock A'),roomB=await create(base,'Controller clock B');
+  const operatorA=await connect(base,'operator',roomA.room.id,roomA.token),operatorAActive=await connect(base,'operator',roomA.room.id,roomA.token),operatorB=await connect(base,'operator',roomB.room.id,roomB.token),audience=await connect(base,'audience',roomA.room.id);
+  await Promise.all([nextMessage(operatorA,m=>m.type==='welcome'),nextMessage(operatorAActive,m=>m.type==='welcome'),nextMessage(operatorB,m=>m.type==='welcome'),nextMessage(audience,m=>m.type==='welcome')]);
+  const probeId=crypto.randomUUID(),clientSent=performance.now();
+  audience.send(JSON.stringify({type:'controller-ping',probeId,clientSent}));
+  await nextMessage(operatorAActive,m=>m.type==='controller-ping'&&m.probeId===probeId);
+  operatorA.send(JSON.stringify({type:'controller-pong',probeId,controllerReceived:15,controllerSent:16}));
+  operatorB.send(JSON.stringify({type:'controller-pong',probeId,controllerReceived:10,controllerSent:11}));
+  operatorAActive.send(JSON.stringify({type:'controller-pong',probeId,controllerReceived:20,controllerSent:21}));
+  const result=await nextMessage(audience,m=>m.type==='controller-pong'&&m.probeId===probeId);
+  assert.equal(result.clientSent,clientSent);assert.equal(result.controllerReceived,20);assert.equal(result.controllerSent,21);assert.equal(result.unavailable,undefined);
+  for(const ws of [operatorA,operatorAActive,operatorB,audience])ws.close();
+});
+
 test('controller lease pauses the running show and turns output off', async (t) => {
   const port=await freePort(),base=`http://127.0.0.1:${port}`;
   const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,NODE_ENV:'test',SHOW_CONTROL_LEASE_MS:'1000'},stdio:'ignore'});

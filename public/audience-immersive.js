@@ -58,7 +58,7 @@ function revealControls() {
 }
 function updateGate() {
   const state = document.querySelector('#show-state')?.textContent?.trim().toLowerCase() || '';
-  needsImmersion = state === 'sync test is live' || state === 'show is live';
+  needsImmersion = state === 'show is live';
   if (!needsImmersion) {
     gate.classList.add('hidden');
     return;

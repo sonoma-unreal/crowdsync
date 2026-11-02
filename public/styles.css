@@ -458,3 +458,5 @@ body{font-family:var(--font);font-weight:400;font-synthesis:none}
 @keyframes home-sweep{0%,100%{opacity:0;transform:scale(.94);background:#141413;box-shadow:none}28%{opacity:1;transform:scale(1.1);background:#e3e1da;border-color:#e3e1da;box-shadow:0 0 13px #e3e1da88}52%{opacity:.16;transform:scale(.98)}}
 @media(max-width:460px){.home-page .home-stage{--stage-grid-inset:16%}.home-page .stage-grid,.home-page .stage-effect{gap:5px}}
 @media(prefers-reduced-motion:reduce){.home-page .stage-effect:not(.stage-effect-comet){animation:none!important}.home-page .stage-effect span{animation:none!important;transition:none!important}}
+
+.audience-page .sync-network-row{display:flex;align-items:center;gap:10px;margin:12px 0 0}.audience-page .sync-network-row .button{min-width:112px}.audience-page .sync-network-row span{font:10px var(--mono);color:var(--aud-muted)}.audience-page .sync-network-help{margin:8px 0 0;font-size:10px;line-height:1.5;color:var(--aud-muted)}
