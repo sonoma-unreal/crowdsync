@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/styles.css?v=join-preflight-2">
 </head>
 <body class="audience-page">
   <main id="output" class="audience-output" aria-hidden="true"><div class="torch-audience-orb"></div><div id="marquee" class="audience-message" aria-live="polite" hidden></div></main>
@@ -23,7 +23,7 @@
     <span id="connection" class="connection">NOT CONNECTED</span>
   </header>
 
-  <section id="join-gate" class="join-gate">
+  <section id="join-gate" class="join-gate hidden">
     <div class="join-dialog">
       <div class="eyebrow">JOIN THE SHOW</div><h1 id="show-name">CrowdSync</h1>
       <p class="muted">Show code <strong id="show-code">------</strong></p>
@@ -76,6 +76,6 @@
   </aside>
   <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button><button id="immersive-exit" class="button button-quiet hidden" type="button">Exit full screen</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/audience.js"></script><script type="module" src="/assets/audience-immersive.js"></script>
+  <script type="module" src="/assets/audience.js?v=join-preflight-2"></script><script type="module" src="/assets/audience-immersive.js"></script>
 </body>
 </html>

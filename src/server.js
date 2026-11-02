@@ -35,7 +35,24 @@ const maxRooms = positiveLimit('MAX_ROOMS', 100, 1000);
 const maxAudience = positiveLimit('MAX_AUDIENCE_PER_ROOM', 2000, 10000);
 const maxWebSockets = positiveLimit('MAX_WEBSOCKET_CONNECTIONS', 5000, 20000);
 const showLeaseMs = positiveLimit('SHOW_CONTROL_LEASE_MS', 30_000, 120_000);
+const roomLookupsPerMinute = positiveLimit('ROOM_LOOKUPS_PER_MINUTE', 300, 60000);
+const operatorCommandsPerWindow = positiveLimit('OPERATOR_COMMANDS_PER_10_SECONDS', 200, 2000);
 const startLeadMs = 1200;
+const createTimestamps = new Map();
+const roomLookupTimestamps = new Map();
+const operatorCommandTimestamps = new Map();
+function consumeRateLimit(map, key, limit, windowMs, now = Date.now()) {
+  const recent = (map.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+  const retryAfter = recent.length ? Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000)) : 1;
+  if (recent.length >= limit) {
+    map.delete(key); map.set(key, recent);
+    return { allowed: false, retryAfter };
+  }
+  recent.push(now);
+  if (!map.has(key) && map.size >= 5000) map.delete(map.keys().next().value);
+  map.delete(key); map.set(key, recent);
+  return { allowed: true, retryAfter: 0 };
+}
 const joinUrl = (id, request) => {
   const host = String(request.headers.host || 'localhost');
   const safeHost = /^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host) || /^\[[a-f0-9:]+\](?::\d{1,5})?$/i.test(host) ? host : 'localhost';
@@ -49,13 +66,19 @@ const send = (ws, data) => {
   ws.send(JSON.stringify(data));
 };
 app.addHook('onSend', async (request, reply, payload) => {
+  reply.header('Cache-Control', 'no-store');
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('X-Frame-Options', 'DENY');
+  reply.header('Cross-Origin-Opener-Policy', 'same-origin');
   reply.header('Cross-Origin-Resource-Policy', 'same-origin');
   reply.header('X-DNS-Prefetch-Control', 'off');
-  const websocketHost = configuredBase?.host || request.headers.host || 'localhost';
-  reply.header('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://${websocketHost} wss://${websocketHost}; media-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`);
+  const requestHost = String(request.headers.host || 'localhost');
+  const safeRequestHost = /^[a-z0-9.-]+(?::\d{1,5})?$/i.test(requestHost) || /^\[[a-f0-9:]+\](?::\d{1,5})?$/i.test(requestHost) ? requestHost : 'localhost';
+  const websocketHost = configuredBase?.host || safeRequestHost;
+  const websocketProtocol = configuredBase?.protocol || (request.protocol === 'https' ? 'https:' : 'http:');
+  const websocketSource = `${websocketProtocol === 'https:' ? 'wss' : 'ws'}://${websocketHost}`;
+  reply.header('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${websocketSource}; media-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`);
   reply.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   if (process.env.NODE_ENV === 'production') reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   return payload;
@@ -169,30 +192,30 @@ app.get('/health', async () => process.env.NODE_ENV === 'production'
 app.get('/favicon.svg', async (_req, reply) => reply.type('image/svg+xml').send(await fs.readFile(path.join(publicDir, 'favicon.svg'))));
 app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'home.html'))); });
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
-app.get('/join/:id', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html'))); });
+app.get('/join/:id', async (req, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  const id = req.params.id;
+  const room = rooms.get(id);
+  if (!/^\d{6}$/.test(id) || !room || room.expiresAt <= Date.now()) {
+    const rate = consumeRateLimit(roomLookupTimestamps, req.ip, roomLookupsPerMinute, 60_000);
+    if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).type('text/plain; charset=utf-8').send('Too many code checks; try again in a minute.'); }
+    return reply.redirect(`/?join=unavailable&code=${encodeURIComponent(id)}#join-show`);
+  }
+  return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html')));
+});
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'keyframe-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'keyframe-editor.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
   return reply.type(req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8').send(await fs.readFile(path.join(publicDir, req.params.file)));
 });
 
-const createTimestamps = new Map();
 app.post('/api/rooms', async (req, reply) => {
-  const ip = req.ip;
-  const now = Date.now();
-  const recent = (createTimestamps.get(ip) || []).filter((t) => now - t < 60_000);
-  if (recent.length >= 6) return reply.code(429).send({ error: 'Room creation limit reached; try again in a minute' });
+  const rate = consumeRateLimit(createTimestamps, req.ip, 6, 60_000);
+  if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).send({ error: 'Room creation limit reached; try again in a minute' }); }
   if (rooms.size >= maxRooms) return reply.code(503).send({ error: 'Room capacity reached' });
   const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 48) : '';
   if (!name) return reply.code(400).send({ error: 'Enter a show name' });
-  recent.push(now); createTimestamps.set(ip, recent);
-  if (createTimestamps.size > 5000) {
-    for (const [key, stamps] of createTimestamps) {
-      const active = stamps.filter((stamp) => now - stamp < 60_000);
-      if (active.length) createTimestamps.set(key, active); else createTimestamps.delete(key);
-    }
-  }
   let id;
   do { id = String(crypto.randomInt(100000, 1000000)); } while (rooms.has(id));
   const room = { id, instance: crypto.randomUUID(), name, status: 'idle', effect: 'pulse', rate: 1.2, enhancedProtection: true, torchEnabled: false, screenMode: false, screenColor: '#25c3e8', accentColor: '#a855f7', startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0, expiresAt: Date.now() + 12 * 60 * 60 * 1000, audience: new Set(), waiting: new Set(), operators: new Set(), audienceIndex: 0, groups: [], syncTest: { active: false, completed: false, testId: 0, startedAt: 0 }, marquee: '', showPlan: null };
@@ -204,7 +227,11 @@ app.post('/api/rooms', async (req, reply) => {
 });
 app.get('/api/rooms/:id', async (req, reply) => {
   const room = rooms.get(req.params.id);
-  if (!room) return reply.code(404).send({ error: 'Show not found' });
+  if (!/^\d{6}$/.test(req.params.id) || !room || room.expiresAt <= Date.now()) {
+    const rate = consumeRateLimit(roomLookupTimestamps, req.ip, roomLookupsPerMinute, 60_000);
+    if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).send({ error: 'Too many code checks; try again in a minute' }); }
+    return reply.code(404).send({ error: 'Show not found' });
+  }
   return { room: { id: room.id, name: room.name } };
 });
 app.get('/api/operator/state', async (req, reply) => {
@@ -215,6 +242,10 @@ app.post('/api/operator/command', async (req, reply) => {
   const auth = authenticate(req, reply); if (!auth) return;
   if (!req.body || Object.getPrototypeOf(req.body) !== Object.prototype || !validateCommand({ type: 'command', ...req.body })) return reply.code(400).send({ error: 'Invalid command structure' });
   if (req.body.commandId <= auth.room.lastCommandId) return { ok: true, duplicate: true };
+  if (!['blackout', 'stop'].includes(req.body.command)) {
+    const rate = consumeRateLimit(operatorCommandTimestamps, auth.room.instance, operatorCommandsPerWindow, 10_000);
+    if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).send({ error: 'Operator command rate limit reached; try again shortly' }); }
+  }
   auth.room.lastCommandId = req.body.commandId;
   const result = applyCommand(auth.room, req.body);
   if (result.error) return reply.code(400).send(result);
@@ -305,6 +336,10 @@ wss.on('connection', (ws) => {
     if (ws.role === 'operator' && message.type === 'command') {
       if (!validateCommand(message)) return send(ws, { type: 'error', message: 'Invalid command structure', command: typeof message.command === 'string' ? message.command.slice(0, 32) : 'unknown', commandId: Number.isSafeInteger(message.commandId) ? message.commandId : null });
       if (message.commandId <= ws.room.lastCommandId) { send(ws, { type: 'ack', command: message.command, commandId: message.commandId, duplicate: true }); return; }
+      if (!['blackout', 'stop'].includes(message.command)) {
+        const rate = consumeRateLimit(operatorCommandTimestamps, ws.room.instance, operatorCommandsPerWindow, 10_000);
+        if (!rate.allowed) { send(ws, { type: 'error', command: message.command, commandId: message.commandId, message: 'Operator command rate limit reached; try again shortly' }); return; }
+      }
       ws.room.lastCommandId = message.commandId;
       const emergency = ['blackout', 'stop', 'sync-start', 'sync-stop', 'start', 'resume', 'pause', 'clear-blackout'].includes(message.command);
       if (emergency || !ws.lastCommandAt || Date.now() - ws.lastCommandAt > 45) {

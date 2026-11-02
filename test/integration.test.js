@@ -46,14 +46,15 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   t.after(()=>child.kill());
   await waitForServer(base,child);
   const health=await (await fetch(`${base}/health`)).json(); assert.equal(health.ok,true);assert.ok(health.process.rssBytes>0);assert.ok(Number.isFinite(health.process.eventLoopDelayMeanMs));
-  const securityHeaders=await fetch(base);assert.equal(securityHeaders.headers.get('x-content-type-options'),'nosniff');assert.equal(securityHeaders.headers.get('x-frame-options'),'DENY');assert.match(securityHeaders.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.doesNotMatch(securityHeaders.headers.get('content-security-policy'),/unsafe-inline/);
+  const securityHeaders=await fetch(base);assert.equal(securityHeaders.headers.get('x-content-type-options'),'nosniff');assert.equal(securityHeaders.headers.get('x-frame-options'),'DENY');assert.equal(securityHeaders.headers.get('cross-origin-opener-policy'),'same-origin');assert.equal(securityHeaders.headers.get('cache-control'),'no-store');assert.match(securityHeaders.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(securityHeaders.headers.get('content-security-policy'),/style-src 'self' https:\/\/fonts\.googleapis\.com/);assert.match(securityHeaders.headers.get('content-security-policy'),/font-src 'self' https:\/\/fonts\.gstatic\.com/);assert.doesNotMatch(securityHeaders.headers.get('content-security-policy'),/unsafe-inline/);assert.equal(securityHeaders.headers.get('access-control-allow-origin'),null);
   const home=await fetch(base);assert.equal(home.status,200);const homeHtml=await home.text();assert.match(homeHtml,/home-hero/);assert.match(homeHtml,/Host a show/);assert.match(homeHtml,/Six-digit show code/);assert.match(homeHtml,/theme-toggle/);assert.match(homeHtml,/How it works/);
-  const hostPage=await fetch(`${base}/host`);assert.equal(hostPage.status,200);const hostHtml=await hostPage.text();assert.match(hostHtml,/Start sync test/);assert.match(hostHtml,/type="module" src="\/assets\/operator\.js"/);assert.doesNotMatch(hostHtml,/fancam/i);
+  const hostPage=await fetch(`${base}/host`);assert.equal(hostPage.status,200);const hostHtml=await hostPage.text();assert.match(hostHtml,/Start sync test/);assert.match(hostHtml,/type="module" src="\/assets\/operator\.js(?:\?[^\"]*)?"/);assert.doesNotMatch(hostHtml,/fancam/i);
   const reconnectModule=await fetch(`${base}/assets/operator-connection.js`);assert.equal(reconnectModule.status,200);assert.match(reconnectModule.headers.get('content-type'),/javascript/);assert.match(await reconnectModule.text(),/classifyOperatorDisconnect/);
   const safetyModule=await fetch(`${base}/assets/safety.js`);assert.equal(safetyModule.status,200);assert.match(await safetyModule.text(),/export function sampleTorch/);
   const homeModule=await fetch(`${base}/assets/home.js`);assert.equal(homeModule.status,200);assert.match(await homeModule.text(),/setTheme/);
   const styles=await fetch(`${base}/assets/styles.css`);assert.equal(styles.status,200);const stylesText=await styles.text();assert.match(stylesText,/operator-page\[data-ambient=running\]/);assert.match(stylesText,/home-page\[data-theme=light\]/);assert.match(stylesText,/home-primary-action[^}]*border-radius:0/);
   const icon=await fetch(`${base}/favicon.svg`);assert.equal(icon.status,200);assert.match(icon.headers.get('content-type'),/image\/svg\+xml/);for(const asset of ['keyframe-editor.js','lucide.js'])assert.equal((await fetch(`${base}/assets/${asset}`)).status,200);
+  for(const path of ['/.git/config','/.env','/src/server.js','/assets/server.js','/assets/operator.js.map'])assert.equal((await fetch(`${base}${path}`)).status,404);
   const roomA=await create(base,'Pep rally'),roomB=await create(base,'Senior night');
   assert.match(roomA.room.id,/^\d{6}$/);assert.match(roomA.url,/\/join\/\d{6}$/);assert.match(roomA.qr,/^data:image\/png;base64,/);
   const joinPage=await fetch(roomA.url);assert.equal(joinPage.status,200);const joinHtml=await joinPage.text();assert.match(joinHtml,/Photosensitivity notice/);assert.doesNotMatch(joinHtml,/fancam/i);
@@ -168,6 +169,26 @@ test('client cannot forge sync-confirmed reconnect state', async (t) => {
   const second=await create(base,'Different room'),secondOperator=await connect(base,'operator',second.room.id,second.token);await nextMessage(secondOperator,m=>m.type==='welcome');
   for(const [command,commandId] of [['sync-start',1],['sync-stop',2],['start',3]]){secondOperator.send(JSON.stringify({type:'command',command,commandId}));await nextMessage(secondOperator,m=>m.type==='ack'&&m.command===command)}
   const crossRoom=await connect(base,'audience',second.room.id,undefined,{reconnectToken:joined.reconnectToken}),crossWelcome=await nextMessage(crossRoom,m=>m.type==='welcome');assert.equal(crossWelcome.audienceIndex,null);assert.equal(crossWelcome.state.audience,0);assert.equal(crossWelcome.state.waiting,1);crossRoom.close();secondOperator.close();operator.close();
+});
+
+test('public room lookups and HTTP operator commands have bounded rates', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`;
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,NODE_ENV:'test',ROOM_LOOKUPS_PER_MINUTE:'2',OPERATOR_COMMANDS_PER_10_SECONDS:'1'},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const created=await create(base,'Rate limit check');
+  assert.equal((await fetch(`${base}/join/${created.room.id}`)).status,200);
+  assert.equal((await fetch(`${base}/api/rooms/${created.room.id}`)).status,200);
+  assert.equal((await fetch(`${base}/api/rooms/not-a-code`)).status,404);
+  assert.equal((await fetch(`${base}/join/not-a-code`,{redirect:'manual'})).status,302);
+  const limitedLookup=await fetch(`${base}/api/rooms/not-a-code`);assert.equal(limitedLookup.status,429);assert.ok(Number(limitedLookup.headers.get('retry-after'))>=1);
+  const command=(commandId,kind='marquee')=>fetch(`${base}/api/operator/command`,{method:'POST',headers:{Authorization:`Bearer ${created.token}`,'content-type':'application/json'},body:JSON.stringify(kind==='marquee'?{command:kind,commandId,text:'hi'}:{command:kind,commandId})});
+  assert.equal((await command(1)).status,200);
+  const limitedCommand=await command(2);assert.equal(limitedCommand.status,429);assert.ok(Number(limitedCommand.headers.get('retry-after'))>=1);
+  assert.equal((await command(2,'blackout')).status,200);
+  const operator=await connect(base,'operator',created.room.id,created.token);await nextMessage(operator,m=>m.type==='welcome');
+  operator.send(JSON.stringify({type:'command',command:'marquee',text:'too fast',commandId:3}));
+  const websocketLimited=await nextMessage(operator,m=>m.type==='error'&&m.commandId===3);assert.match(websocketLimited.message,/rate limit/);
+  operator.send(JSON.stringify({type:'command',command:'blackout',commandId:3}));assert.equal((await nextMessage(operator,m=>m.type==='ack'&&m.command==='blackout')).command,'blackout');operator.close();
 });
 
 test('WebSocket connection cap rejects excess local connections', async (t) => {

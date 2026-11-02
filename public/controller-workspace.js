@@ -1,6 +1,7 @@
 import { TORCH_EFFECTS } from './safety.js';
 
 const STORAGE_KEY = 'crowdsync.controller.workspace.v2';
+const LAYOUT_PRESETS_KEY = 'crowdsync.controller.workspace-presets.v1';
 const THEME_KEY = 'crowdsync.controller.theme.v1';
 const PERFORMANCE_KEY = 'crowdsync.controller.performance.v1';
 const COMMUNITY_KEY = 'crowdsync.community-look-packs.v1';
@@ -14,7 +15,7 @@ const prefsButton = document.querySelector('#controller-preferences');
 const preferenceDialog = document.createElement('dialog');
 preferenceDialog.className = 'controller-preferences-dialog';
 preferenceDialog.setAttribute('aria-labelledby', 'controller-preferences-title');
-preferenceDialog.innerHTML = '<form method="dialog"><header><div><div class="eyebrow">PRODUCTION DESK</div><h2 id="controller-preferences-title">Workspace preferences</h2></div><button class="square-icon" value="close" aria-label="Close preferences"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p class="preferences-copy">Arrange the control desk for this device. Window layouts and appearance are saved locally.</p><section class="preference-section"><h3>Theme</h3><div class="preference-choice-row"><button type="button" data-theme-choice="dark">Dark</button><button type="button" data-theme-choice="light">Light</button></div></section><section class="preference-section"><label class="preference-switch"><span><strong>Performance mode</strong><small>Reduce background movement and interface transitions.</small></span><input id="performance-mode" type="checkbox"><i aria-hidden="true"></i></label></section><section class="preference-section"><h3>Workspace windows</h3><div class="workspace-window-list"></div><button class="button button-secondary restore-all" type="button">Restore all windows</button><button class="button button-quiet reset-layout" type="button">Reset layout and preferences</button></section></form>';
+preferenceDialog.innerHTML = '<form method="dialog"><header><div><div class="eyebrow">PRODUCTION DESK</div><h2 id="controller-preferences-title">Workspace preferences</h2></div><button class="square-icon" value="close" aria-label="Close preferences"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p class="preferences-copy">Arrange the control desk for this device. Window layouts and appearance are saved locally.</p><section class="preference-section workspace-layout-section"><h3>Saved workspace layouts</h3><p class="small-copy">Save window positions, sizes, visibility and arrangement for reuse on another show.</p><div class="workspace-layout-save-row"><input id="workspace-layout-name" maxlength="40" placeholder="Name this layout" aria-label="Workspace layout name"><button id="save-workspace-layout" class="button button-secondary" type="button">Save current</button></div><div class="workspace-layout-load-row"><select id="workspace-layout-select" aria-label="Saved workspace layouts"><option value="">No saved layouts</option></select><button id="load-workspace-layout" class="button button-secondary" type="button" disabled>Load</button><button id="delete-workspace-layout" class="button button-quiet" type="button" disabled>Delete</button></div><p id="workspace-layout-status" class="small-copy" aria-live="polite"></p></section><section class="preference-section"><h3>Theme</h3><div class="preference-choice-row"><button type="button" data-theme-choice="dark">Dark</button><button type="button" data-theme-choice="light">Light</button></div></section><section class="preference-section"><label class="preference-switch"><span><strong>Performance mode</strong><small>Reduce background movement and interface transitions.</small></span><input id="performance-mode" type="checkbox"><i aria-hidden="true"></i></label></section><section class="preference-section"><h3>Workspace windows</h3><div class="workspace-window-list"></div><button class="button button-secondary restore-all" type="button">Restore all windows</button><button class="button button-quiet reset-layout" type="button">Reset layout and preferences</button></section></form>';
 document.body.append(preferenceDialog);
 const contextMenu = document.createElement('div');
 contextMenu.className = 'workspace-context-menu hidden';
@@ -55,6 +56,14 @@ function readWorkspace() {
     return value && typeof value === 'object' ? value : {};
   } catch { return {}; }
 }
+function readWorkspacePresets() {
+  try {
+    const value = JSON.parse(localStorage.getItem(LAYOUT_PRESETS_KEY) || '[]');
+    if (!Array.isArray(value)) return [];
+    return value.filter((item) => item && typeof item.id === 'string' && typeof item.name === 'string' && item.name.trim() && item.name.length <= 40 && item.state && typeof item.state === 'object').slice(0, 20);
+  } catch { return []; }
+}
+let workspacePresets = readWorkspacePresets();
 function saveWorkspace() {
   workspaceState = Object.fromEntries(roots.map((root) => [root.dataset.workspaceGrid, {
     order: [...root.querySelectorAll(':scope > .workspace-window')].map((node) => node.dataset.windowId),
@@ -70,10 +79,40 @@ function saveWorkspace() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(workspaceState)); } catch {}
   renderWindowSettings();
 }
+function applyWorkspaceSnapshot(snapshot) {
+  for (const root of roots) {
+    const saved = snapshot?.[root.dataset.workspaceGrid] || {};
+    const cards = [...root.querySelectorAll(':scope > .workspace-window')];
+    const byId = new Map(cards.map((card) => [card.dataset.windowId, card]));
+    const ordered = [], seen = new Set();
+    for (const id of Array.isArray(saved.order) ? saved.order : []) if (byId.has(id) && !seen.has(id)) { ordered.push(byId.get(id)); seen.add(id); }
+    for (const card of cards) if (!seen.has(card.dataset.windowId)) ordered.push(card);
+    ordered.forEach((card) => root.append(card));
+    for (const card of cards) {
+      card.classList.remove('is-hidden-window', 'is-minimized-window', 'is-resized-window');
+      updateMinimizeControl(card, false);
+      card.removeAttribute('data-window-columns'); card.removeAttribute('data-window-height');
+      card.style.removeProperty('--window-columns'); card.style.removeProperty('--window-height');
+      clearFreePosition(card);
+    }
+    for (const id of saved.hidden || []) byId.get(id)?.classList.add('is-hidden-window');
+    for (const id of saved.minimized || []) { const card = byId.get(id); if (card) { card.classList.add('is-minimized-window'); updateMinimizeControl(card, true); } }
+    for (const [id, size] of Object.entries(saved.sizes || {})) {
+      const card = byId.get(id); if (!card) continue;
+      if (Number.isInteger(size.columns) && size.columns >= 2 && size.columns <= 12) setWindowColumns(card, size.columns);
+      if (Number.isInteger(size.height) && size.height >= 180 && size.height <= 1000) setWindowHeight(card, size.height);
+    }
+    for (const [id, position] of Object.entries(saved.free || {})) {
+      const card = byId.get(id); if (!card || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) continue;
+      setFreePosition(card, Math.max(0, position.x), Math.max(0, position.y), Math.max(280, Number(position.width) || card.getBoundingClientRect().width));
+    }
+  }
+  contextMenu.classList.add('hidden'); saveWorkspace();
+}
 function labelFor(card) {
   const labels = [
     ['audience-setup-card', 'AUDIENCE SYNC'], ['join-card', 'JOIN CODE'],
-    ['crowd-preview-card', 'CROWD MONITOR'], ['effects-card', 'LIGHT DESIGN'],
+    ['crowd-preview-card', 'CROWD MONITOR'], ['effects-card', 'LIGHT DESIGN'], ['effect-graph-card', 'EFFECT NODES'],
     ['cue-builder-card', 'BEAT SEQUENCER'], ['community-effects-card', 'LOCAL LOOK PACKS'],
     ['live-controls-card', 'LIVE CONSOLE'], ['activity-card', 'ROOM ACTIVITY'],
   ];
@@ -109,7 +148,8 @@ function setupRoots() {
       const id = card.classList.contains('audience-setup-card') ? 'sync-check'
         : card.classList.contains('join-card') ? 'join-code'
           : card.classList.contains('crowd-preview-card') ? 'crowd-preview'
-            : card.classList.contains('effects-card') ? 'effect-library'
+              : card.classList.contains('effects-card') ? 'effect-library'
+                : card.classList.contains('effect-graph-card') ? 'effect-nodes'
               : card.classList.contains('cue-builder-card') ? 'cue-sheet'
               : card.classList.contains('community-effects-card') ? 'community-effects'
                 : card.classList.contains('live-controls-card') ? 'show-controls'
@@ -366,6 +406,38 @@ function renderWindowSettings() {
     list.append(group);
   }
 }
+function renderWorkspacePresets(selectedId = '') {
+  const select = preferenceDialog.querySelector('#workspace-layout-select');
+  if (!select) return;
+  select.replaceChildren(new Option(workspacePresets.length ? 'Choose a saved layout' : 'No saved layouts', ''));
+  for (const preset of workspacePresets) select.add(new Option(preset.name, preset.id));
+  if (workspacePresets.some((preset) => preset.id === selectedId)) select.value = selectedId;
+  preferenceDialog.querySelector('#load-workspace-layout').disabled = !select.value;
+  preferenceDialog.querySelector('#delete-workspace-layout').disabled = !select.value;
+}
+function saveWorkspacePreset() {
+  const input = preferenceDialog.querySelector('#workspace-layout-name'), name = input.value.trim();
+  const status = preferenceDialog.querySelector('#workspace-layout-status');
+  if (!name) { status.textContent = 'Enter a name for this layout.'; input.focus(); return; }
+  saveWorkspace();
+  const preset = { id: crypto.randomUUID(), name: name.slice(0, 40), state: JSON.parse(JSON.stringify(workspaceState)) };
+  workspacePresets = [preset, ...workspacePresets.filter((item) => item.name.toLocaleLowerCase() !== preset.name.toLocaleLowerCase())].slice(0, 20);
+  try { localStorage.setItem(LAYOUT_PRESETS_KEY, JSON.stringify(workspacePresets)); renderWorkspacePresets(preset.id); status.textContent = `“${preset.name}” saved for this browser.`; input.value = ''; }
+  catch { status.textContent = 'This browser could not save the layout.'; }
+}
+function loadWorkspacePreset() {
+  const id = preferenceDialog.querySelector('#workspace-layout-select').value, preset = workspacePresets.find((item) => item.id === id);
+  if (!preset) return;
+  applyWorkspaceSnapshot(preset.state);
+  preferenceDialog.querySelector('#workspace-layout-status').textContent = `“${preset.name}” applied.`;
+}
+function deleteWorkspacePreset() {
+  const id = preferenceDialog.querySelector('#workspace-layout-select').value;
+  if (!id) return;
+  workspacePresets = workspacePresets.filter((item) => item.id !== id);
+  try { localStorage.setItem(LAYOUT_PRESETS_KEY, JSON.stringify(workspacePresets)); } catch {}
+  renderWorkspacePresets(); preferenceDialog.querySelector('#workspace-layout-status').textContent = 'Saved layout deleted.';
+}
 function setTheme(theme) {
   document.body.dataset.theme = theme;
   try { localStorage.setItem(THEME_KEY, theme); } catch {}
@@ -382,6 +454,11 @@ function setPerformanceMode(enabled) {
 setupRoots();
 try { setTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'); setPerformanceMode(localStorage.getItem(PERFORMANCE_KEY) === 'reduced'); } catch { setTheme('dark'); setPerformanceMode(false); }
 prefsButton?.addEventListener('click', () => { renderWindowSettings(); preferenceDialog.showModal(); });
+renderWorkspacePresets();
+preferenceDialog.querySelector('#save-workspace-layout').addEventListener('click', saveWorkspacePreset);
+preferenceDialog.querySelector('#load-workspace-layout').addEventListener('click', loadWorkspacePreset);
+preferenceDialog.querySelector('#delete-workspace-layout').addEventListener('click', deleteWorkspacePreset);
+preferenceDialog.querySelector('#workspace-layout-select').addEventListener('change', () => renderWorkspacePresets(preferenceDialog.querySelector('#workspace-layout-select').value));
 preferenceDialog.querySelectorAll('[data-theme-choice]').forEach((button) => button.addEventListener('click', () => setTheme(button.dataset.themeChoice)));
 preferenceDialog.querySelector('#performance-mode').addEventListener('change', (event) => setPerformanceMode(event.target.checked));
 preferenceDialog.querySelector('.restore-all').addEventListener('click', restoreWindows);

@@ -7,6 +7,10 @@ export function assertProductionConfig() {
     throw new Error('SESSION_SECRET must contain at least 32 characters in production');
   }
   if (process.env.NODE_ENV === 'production') {
+    const logLevel = (process.env.LOG_LEVEL || 'info').trim().toLowerCase();
+    if (logLevel === 'debug' || logLevel === 'trace') {
+      throw new Error('LOG_LEVEL must not be debug or trace in production');
+    }
     let base;
     try { base = new URL(process.env.PUBLIC_BASE_URL || ''); } catch { throw new Error('PUBLIC_BASE_URL must be an absolute HTTPS URL in production'); }
     if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/' || base.search || base.hash) throw new Error('PUBLIC_BASE_URL must be an HTTPS origin in production');
