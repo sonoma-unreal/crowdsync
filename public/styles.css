@@ -358,3 +358,11 @@ body{font-family:var(--font);font-weight:400;font-synthesis:none}
 .operator-page input::placeholder,.operator-page textarea::placeholder{color:var(--desk-dim);opacity:1}
 .operator-page .room-code{font:600 31px var(--mono);letter-spacing:5px;color:var(--desk-text)}
 .operator-page .join-card h2{font-weight:560}
+
+/* Carry the wide desktop workspace treatment across every controller tab. */
+.operator-page .operator-shell{width:100%;max-width:none;padding-inline:clamp(16px,2.4vw,36px)}
+.operator-page .operator-topbar{padding-inline:clamp(16px,2.4vw,36px)}
+.operator-page .controller-preferences{display:grid;place-items:center;flex:none;width:40px;height:40px;padding:0!important;margin-inline:4px}
+.operator-page .controller-preferences .ui-icon{display:block;width:18px;height:18px;margin:0}
+.operator-page .desk-pane-heading>.eyebrow,.operator-page .desk-pane-heading>div>.eyebrow{display:none}
+@media(max-width:600px){.operator-page .operator-shell{width:100%;padding:14px 10px 30px}.operator-page .operator-topbar{padding-inline:10px}.operator-page .show-workspace{width:100%;margin-left:0}}
