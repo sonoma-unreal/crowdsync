@@ -11,7 +11,7 @@ LightSync is an independently implemented, self-hostable synchronized audience l
 ## Run locally (Windows PowerShell)
 
 ```powershell
-cd "C:\Users\Hecto\OneDrive\Documents\ChatGPT\Project Crowdsync"
+cd "C:\Users\User\Downloads\"
 Copy-Item .env.example .env
 npm install
 $env:PORT = "3000"
