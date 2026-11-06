@@ -2,10 +2,12 @@ import { decodeBeatMap, decodeBeatStyles, TORCH_EFFECTS } from './safety.js';
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const palette = Object.entries(TORCH_EFFECTS).filter(([, effect]) => effect.pulses > 0).map(([id, effect]) => [id, effect.label]);
+const hueColor = (h, s, v = 1) => { const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]; return `#${[r, g, b].map(value => Math.round((value + m) * 255).toString(16).padStart(2, '0')).join('')}`; };
+function colorHueSaturation(hex) { const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min; let h = 0; if (d) h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4); return { h: (h + 360) % 360, s: max ? d / max : 0, v: max }; }
 const rowHeight = 48;
 const viewportStorageKey = 'crowdsync.cuegraph.viewport.v2';
 let activePlan = null, activeUpdate = null, selectedIndex = 0, graphResize = null;
-let graphPositions = {}, graphStorageKey = '', pointerDrag = null, activeGraphRedraw = null;
+let graphPositions = {}, graphStorageKey = '', pointerDrag = null, activeGraphRedraw = null, activePlaybackIndex = -1, followPlayback = true;
 let graphView = loadView(), inspectorTab = 'properties';
 
 function loadView() {
@@ -26,9 +28,10 @@ function frameStyle(plan, index, table, indices) {
   const styleIndex = indices?.[index] ?? 0;
   return table[styleIndex] || { effect: 'pulse', screenColor: plan?.cues?.[0]?.screenColor || '#f4f1e8' };
 }
-function visibleBeatIndexes(times) {
-  const count = Math.min(36, times.length);
-  return Array.from({ length: count }, (_, i) => count === 1 ? 0 : Math.round(i * (times.length - 1) / (count - 1)));
+function visibleBeatIndexes(times, focusIndex = selectedIndex) {
+  const start = Math.max(0, Math.min(times.length - 1, Math.floor(Math.max(0, focusIndex) / 36) * 36));
+  const count = Math.min(36, times.length - start);
+  return Array.from({ length: count }, (_, i) => start + i);
 }
 function defaultPosition(nodeOrder, indexes, width, height) {
   const columns = Math.max(2, Math.min(7, Math.floor(width / 126)));
@@ -41,18 +44,18 @@ function defaultPosition(nodeOrder, indexes, width, height) {
 }
 function worldPosition(index, order, indexes, width, height) { return graphPositions[index] || defaultPosition(order, indexes, width, height); }
 function fitGraph(canvas, times) {
-  const width = Number(canvas.dataset.width), height = Number(canvas.dataset.height), indexes = visibleBeatIndexes(times);
+  const width = Number(canvas.dataset.width), height = Number(canvas.dataset.height), indexes = visibleBeatIndexes(times, followPlayback && activePlaybackIndex >= 0 ? activePlaybackIndex : selectedIndex);
   const points = indexes.map((index, order) => worldPosition(index, order, indexes, width, height));
   const minX = Math.min(...points.map((point) => point.x)) - 60, maxX = Math.max(...points.map((point) => point.x)) + 60;
   const minY = Math.min(...points.map((point) => point.y)) - 48, maxY = Math.max(...points.map((point) => point.y)) + 48;
   graphView.zoom = Math.max(.22, Math.min(2.5, (width - 36) / Math.max(1, maxX - minX), (height - 36) / Math.max(1, maxY - minY)));
   graphView.x = -(minX + maxX) / 2; graphView.y = -(minY + maxY) / 2;
-  persistView(); drawGraph(canvas, times, activePlan.beatStyleTable || [activePlan.cues[0]], activePlan.beatStyles ? decodeBeatStyles(activePlan.beatStyles, times.length, activePlan.beatStyleTable || [activePlan.cues[0]]) : Array(times.length).fill(0));
+  persistView(); drawGraph(canvas, times, activePlan.beatStyleTable || [activePlan.cues[0]], activePlan.beatStyles ? decodeBeatStyles(activePlan.beatStyles, times.length, activePlan.beatStyleTable || [activePlan.cues[0]]) : Array(times.length).fill(0), activePlaybackIndex);
 }
 function screenToWorld(x, y, width, height) {
   return { x: (x - width / 2 - graphView.x * graphView.zoom) / graphView.zoom, y: (y - height / 2 - graphView.y * graphView.zoom) / graphView.zoom };
 }
-function drawGraph(canvas, times, styles, indices) {
+function drawGraph(canvas, times, styles, indices, playingIndex = activePlaybackIndex) {
   if (!canvas || !times?.length) return;
   const rect = canvas.getBoundingClientRect(), width = Math.max(320, rect.width), indexes = visibleBeatIndexes(times);
   const columns = Math.max(2, Math.min(7, Math.floor(width / 126))), rows = Math.ceil(indexes.length / columns);
@@ -70,7 +73,8 @@ function drawGraph(canvas, times, styles, indices) {
   for (let x = originX - spacing; x >= 0; x -= spacing) { const major = Math.round((originX - x) / spacing) % 5 === 0; ctx.strokeStyle = lightTheme ? (major ? '#d3d2cc' : '#e7e6e1') : (major ? '#292927' : '#191918'); ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, height); ctx.stroke(); }
   for (let y = originY; y < height; y += spacing) { const major = Math.round((y - originY) / spacing) % 5 === 0; ctx.strokeStyle = lightTheme ? (major ? '#d3d2cc' : '#e7e6e1') : (major ? '#292927' : '#191918'); ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(width, y + .5); ctx.stroke(); }
   for (let y = originY - spacing; y >= 0; y -= spacing) { const major = Math.round((originY - y) / spacing) % 5 === 0; ctx.strokeStyle = lightTheme ? (major ? '#d3d2cc' : '#e7e6e1') : (major ? '#292927' : '#191918'); ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(width, y + .5); ctx.stroke(); }
-  const nodes = indexes.map((beatIndex, order) => ({ beatIndex, ...worldPosition(beatIndex, order, indexes, width, height), style: frameStyle(activePlan, beatIndex, styles, indices), selected: beatIndex === selectedIndex }));
+  const focusIndex = followPlayback && playingIndex >= 0 ? playingIndex : selectedIndex;
+  const nodes = visibleBeatIndexes(times, focusIndex).map((beatIndex, order, visible) => ({ beatIndex, ...worldPosition(beatIndex, order, visible, width, height), style: frameStyle(activePlan, beatIndex, styles, indices), selected: beatIndex === selectedIndex, active: beatIndex === playingIndex }));
   ctx.save(); ctx.translate(width / 2 + graphView.x * graphView.zoom, height / 2 + graphView.y * graphView.zoom); ctx.scale(graphView.zoom, graphView.zoom);
   ctx.lineWidth = 1.6;
   for (let i = 0; i < nodes.length - 1; i++) {
@@ -82,7 +86,10 @@ function drawGraph(canvas, times, styles, indices) {
   for (const node of nodes) {
     const left = node.x - 44, top = node.y - 21;
     ctx.fillStyle = lightTheme ? '#e9e8e2' : '#20201e'; ctx.strokeStyle = node.selected ? (lightTheme ? '#252522' : '#e0ddd4') : (lightTheme ? '#aaa9a1' : '#58574f'); ctx.lineWidth = node.selected ? 2 : 1;
+    if (node.active) { ctx.shadowColor = node.style.screenColor; ctx.shadowBlur = lightTheme ? 14 : 20; }
     ctx.fillRect(left, top, 88, 42); ctx.strokeRect(left + .5, top + .5, 87, 41);
+    ctx.shadowBlur = 0;
+    if (node.active) { ctx.strokeStyle = node.style.screenColor; ctx.lineWidth = 1.4; ctx.strokeRect(left + 2, top + 2, 83, 37); }
     ctx.fillStyle = node.style.screenColor; ctx.fillRect(left + 6, top + 7, 5, 28);
     ctx.fillStyle = lightTheme ? '#20201e' : '#efeee9'; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'left';
     ctx.fillText(`BEAT ${String(node.beatIndex + 1).padStart(2, '0')}`, left + 16, top + 17);
@@ -94,6 +101,9 @@ function drawGraph(canvas, times, styles, indices) {
   ctx.restore();
   canvas.dataset.width = String(width); canvas.dataset.height = String(height);
   const zoomLabel = document.querySelector('#graph-zoom-level'); if (zoomLabel) zoomLabel.value = `${Math.round(graphView.zoom * 100)}%`;
+  const total = times.length, pageStart = Math.max(0, Math.min(total - 1, Math.floor(Math.max(0, focusIndex) / 36) * 36));
+  const pageLabel = document.querySelector('#beat-page-label'); if (pageLabel) pageLabel.textContent = `${pageStart + 1}–${Math.min(total, pageStart + 36)} / ${total}`;
+  const follow = document.querySelector('#beat-follow'); if (follow) { follow.setAttribute('aria-pressed', String(followPlayback)); follow.classList.toggle('selected', followPlayback); }
 }
 function updateRow(index, field, value, table, indices) {
   const current = frameStyle(activePlan, index, table, indices), nextStyle = { ...current, [field]: value };
@@ -128,7 +138,7 @@ function renderList(viewport, times, table, indices) {
     for (const [id, label] of palette) effect.append(new Option(TORCH_EFFECTS[id]?.label || label, id));
     effect.value = style.effect;
     const color = document.createElement('input'); color.type = 'color'; color.className = 'keyframe-color'; color.value = style.screenColor; color.setAttribute('aria-label', `Beat ${index + 1} screen color`);
-    select.addEventListener('click', () => { selectedIndex = index; setInspectorTab(document.querySelector('#keyframe-editor'), 'properties'); renderKeyframeEditor(activePlan, activeUpdate, false); });
+    select.addEventListener('click', () => { selectedIndex = index; followPlayback = false; setInspectorTab(document.querySelector('#keyframe-editor'), 'properties'); renderKeyframeEditor(activePlan, activeUpdate, false); });
     effect.addEventListener('change', () => updateRow(index, 'effect', effect.value, table, indices));
     color.addEventListener('change', () => updateRow(index, 'screenColor', color.value, table, indices));
     row.append(select, effect, color); fragment.append(row);
@@ -149,28 +159,40 @@ function renderKeyframeEditor(plan, onUpdate, resetSelection = true) {
   if (resetSelection) selectedIndex = Math.min(selectedIndex, times.length - 1);
   const nextStorageKey = `crowdsync.cuegraph.nodes.v2.${plan.durationMs}.${times.length}.${hashMap(plan.beatMap)}`;
   if (nextStorageKey !== graphStorageKey) { graphStorageKey = nextStorageKey; graphPositions = {}; try { graphPositions = validGraphPositions(JSON.parse(localStorage.getItem(graphStorageKey) || '{}'), times.length); } catch {} }
-  const canvas = shell.querySelector('canvas'), viewport = shell.querySelector('.keyframe-list'), effectControl = shell.querySelector('#keyframe-property-effect'), colorControl = shell.querySelector('#keyframe-property-color');
-  shell.querySelector('#keyframe-total').textContent = `${times.length} BEATS · ${Math.min(36, times.length)} NODES`;
+  const canvas = shell.querySelector('canvas'), viewport = shell.querySelector('.keyframe-list'), effectControl = shell.querySelector('#keyframe-property-effect'), colorControl = shell.querySelector('#keyframe-property-color'), lightboxEffects = shell.querySelector('#keyframe-lightbox-effects'), lightboxColor = shell.querySelector('#keyframe-lightbox-color-value'), lightboxWheel = shell.querySelector('#keyframe-lightbox-wheel'), lightboxMarker = lightboxWheel.querySelector('span'), lightboxSaturation = shell.querySelector('#keyframe-lightbox-saturation'), lightboxBrightness = shell.querySelector('#keyframe-lightbox-brightness'), lightboxSaturationValue = shell.querySelector('#keyframe-lightbox-saturation-value'), lightboxBrightnessValue = shell.querySelector('#keyframe-lightbox-brightness-value');
+  shell.querySelector('#keyframe-total').textContent = `${times.length} BEATS · 36 NODE VIEW`;
   const propertyStyle = frameStyle(plan, selectedIndex, table, indices);
   effectControl.replaceChildren(...palette.map(([id, label]) => new Option(TORCH_EFFECTS[id]?.label || label, id)));
   effectControl.value = propertyStyle.effect; colorControl.value = propertyStyle.screenColor;
+  lightboxColor.value = propertyStyle.screenColor;
+  lightboxEffects.replaceChildren(...palette.map(([id, label]) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'keyframe-lightbox-chip'; button.textContent = label; button.draggable = true; button.dataset.effect = id; button.addEventListener('dragstart', event => event.dataTransfer.setData('text/plain', `effect:${id}`)); button.addEventListener('click', () => updateRow(selectedIndex, 'effect', id, table, indices)); return button; }));
+  const wheelHueSat = colorHueSaturation(propertyStyle.screenColor), wheelRadius = Math.max(1, lightboxWheel.clientWidth / 2 - 11);
+  lightboxWheel.setAttribute('aria-valuenow', String(Math.round(wheelHueSat.h)));
+  lightboxMarker.style.left = `calc(50% + ${Math.cos(wheelHueSat.h * Math.PI / 180) * wheelRadius}px)`;
+  lightboxMarker.style.top = `calc(50% - ${Math.sin(wheelHueSat.h * Math.PI / 180) * wheelRadius}px)`;
+  lightboxMarker.style.transform = `translate(-50%,-50%) rotate(${wheelHueSat.h + 90}deg)`;
+  lightboxSaturation.value = String(Math.round(wheelHueSat.s * 100)); lightboxBrightness.value = String(Math.round(wheelHueSat.v * 100));
+  lightboxSaturationValue.value = `${lightboxSaturation.value}%`; lightboxBrightnessValue.value = `${lightboxBrightness.value}%`;
   updateSelectedLabel(shell, times); setInspectorTab(shell, inspectorTab);
-  drawGraph(canvas, times, table, indices); renderList(viewport, times, table, indices);
-  activeGraphRedraw = () => drawGraph(canvas, times, table, indices);
+  drawGraph(canvas, times, table, indices, activePlaybackIndex); renderList(viewport, times, table, indices);
+  activeGraphRedraw = () => drawGraph(canvas, times, table, indices, activePlaybackIndex);
   viewport.onscroll = () => renderList(viewport, times, table, indices);
   shell.querySelectorAll('[data-inspector-tab]').forEach((button) => { button.onclick = () => setInspectorTab(shell, button.dataset.inspectorTab); });
   effectControl.onchange = () => updateRow(selectedIndex, 'effect', effectControl.value, table, indices);
   colorControl.onchange = () => updateRow(selectedIndex, 'screenColor', colorControl.value, table, indices);
   const selectNode = (index, scrollList = false) => {
-    selectedIndex = index; setInspectorTab(shell, 'properties'); updateSelectedLabel(shell, times);
-    effectControl.value = frameStyle(plan, index, table, indices).effect; colorControl.value = frameStyle(plan, index, table, indices).screenColor;
+    selectedIndex = index; followPlayback = false; setInspectorTab(shell, 'properties'); updateSelectedLabel(shell, times);
+    const style = frameStyle(plan, index, table, indices); effectControl.value = style.effect; colorControl.value = style.screenColor; lightboxColor.value = style.screenColor;
+    const hs = colorHueSaturation(style.screenColor), radius = Math.max(1, lightboxWheel.clientWidth / 2 - 11);
+    lightboxWheel.setAttribute('aria-valuenow', String(Math.round(hs.h))); lightboxMarker.style.left = `calc(50% + ${Math.cos(hs.h * Math.PI / 180) * radius}px)`; lightboxMarker.style.top = `calc(50% - ${Math.sin(hs.h * Math.PI / 180) * radius}px)`; lightboxMarker.style.transform = `translate(-50%,-50%) rotate(${hs.h + 90}deg)`;
+    lightboxSaturation.value = String(Math.round(hs.s * 100)); lightboxBrightness.value = String(Math.round(hs.v * 100)); lightboxSaturationValue.value = `${lightboxSaturation.value}%`; lightboxBrightnessValue.value = `${lightboxBrightness.value}%`;
     if (scrollList) viewport.scrollTop = Math.max(0, index * rowHeight - rowHeight * 2);
     renderList(viewport, times, table, indices); drawGraph(canvas, times, table, indices);
   };
   canvas.onpointerdown = (event) => {
     if (event.button !== 0) return;
     const rect = canvas.getBoundingClientRect(), width = Number(canvas.dataset.width), height = Number(canvas.dataset.height), x = event.clientX - rect.left, y = event.clientY - rect.top;
-    const world = screenToWorld(x, y, width, height), indexes = visibleBeatIndexes(times);
+    const world = screenToWorld(x, y, width, height), indexes = visibleBeatIndexes(times, followPlayback && activePlaybackIndex >= 0 ? activePlaybackIndex : selectedIndex);
     const hit = indexes.map((index, order) => ({ index, ...worldPosition(index, order, indexes, width, height) })).find((node) => Math.abs(node.x - world.x) <= 46 && Math.abs(node.y - world.y) <= 23);
     if (hit) { selectNode(hit.index, true); pointerDrag = { type: 'node', index: hit.index, pointerId: event.pointerId }; }
     else pointerDrag = { type: 'pan', pointerId: event.pointerId, x: event.clientX, y: event.clientY, viewX: graphView.x, viewY: graphView.y };
@@ -195,13 +217,54 @@ function renderKeyframeEditor(plan, onUpdate, resetSelection = true) {
     graphView.x = (sx - width / 2) / graphView.zoom - fixed.x; graphView.y = (sy - height / 2) / graphView.zoom - fixed.y;
     persistView(); drawGraph(canvas, times, table, indices);
   };
+  canvas.ondragover = event => { if (event.dataTransfer.types.includes('text/plain')) event.preventDefault(); };
+  canvas.ondrop = event => {
+    event.preventDefault(); const payload = event.dataTransfer.getData('text/plain'); if (!payload.startsWith('effect:')) return;
+    const effect = payload.slice(7); if (!palette.some(([id]) => id === effect)) return;
+    const rect = canvas.getBoundingClientRect(), width = Number(canvas.dataset.width), height = Number(canvas.dataset.height), world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top, width, height), indexes = visibleBeatIndexes(times, selectedIndex);
+    const hit = indexes.map((index, order) => ({ index, ...worldPosition(index, order, indexes, width, height) })).find(node => Math.abs(node.x - world.x) <= 52 && Math.abs(node.y - world.y) <= 28);
+    const target = hit?.index ?? selectedIndex; selectedIndex = target; followPlayback = false; setInspectorTab(shell, 'lightbox'); updateRow(target, 'effect', effect, table, indices);
+  };
+  let wheelPointer = null, wheelPendingColor = propertyStyle.screenColor, wheelHue = wheelHueSat.h;
+  const placeWheelMarker = h => { const radius = Math.max(1, lightboxWheel.clientWidth / 2 - 7); lightboxMarker.style.left = `calc(50% + ${Math.cos(h * Math.PI / 180) * radius}px)`; lightboxMarker.style.top = `calc(50% - ${Math.sin(h * Math.PI / 180) * radius}px)`; lightboxMarker.style.transform = `translate(-50%,-50%) rotate(${h + 90}deg)`; lightboxWheel.setAttribute('aria-valuenow', String(Math.round(h))); };
+  const currentWheelColor = () => hueColor(wheelHue, Number(lightboxSaturation.value) / 100, Number(lightboxBrightness.value) / 100);
+  const moveLightboxWheel = event => { const rect = lightboxWheel.getBoundingClientRect(), dx = event.clientX - rect.left - rect.width / 2, dy = event.clientY - rect.top - rect.height / 2; if (Math.hypot(dx, dy) > 1) wheelHue = (Math.atan2(-dy, dx) * 180 / Math.PI + 360) % 360; wheelPendingColor = currentWheelColor(); lightboxColor.value = wheelPendingColor; placeWheelMarker(wheelHue); };
+  lightboxWheel.onpointerdown = event => { const rect = lightboxWheel.getBoundingClientRect(), dx = event.clientX - rect.left - rect.width / 2, dy = event.clientY - rect.top - rect.height / 2; if (Math.hypot(dx, dy) < rect.width / 2 - 20) return; wheelPointer = event.pointerId; lightboxWheel.setPointerCapture(event.pointerId); moveLightboxWheel(event); };
+  lightboxWheel.onpointermove = event => { if (wheelPointer === event.pointerId) moveLightboxWheel(event); };
+  const finishWheel = event => { if (wheelPointer !== event.pointerId) return; wheelPointer = null; updateRow(selectedIndex, 'screenColor', wheelPendingColor, table, indices); };
+  lightboxWheel.onpointerup = finishWheel; lightboxWheel.onpointercancel = finishWheel;
+  lightboxWheel.onkeydown = event => { if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); wheelHue = (wheelHue + (event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? 358 : 2)) % 360; wheelPendingColor = currentWheelColor(); lightboxColor.value = wheelPendingColor; placeWheelMarker(wheelHue); updateRow(selectedIndex, 'screenColor', wheelPendingColor, table, indices); };
+  const syncLightboxSliders = () => { const hs = colorHueSaturation(lightboxColor.value); wheelHue = hs.h; lightboxSaturation.value = String(Math.round(hs.s * 100)); lightboxBrightness.value = String(Math.round(hs.v * 100)); lightboxSaturationValue.value = `${lightboxSaturation.value}%`; lightboxBrightnessValue.value = `${lightboxBrightness.value}%`; placeWheelMarker(hs.h, hs.s); };
+  lightboxColor.onchange = () => { wheelPendingColor = lightboxColor.value; syncLightboxSliders(); updateRow(selectedIndex, 'screenColor', wheelPendingColor, table, indices); };
+  const updateLightboxColor = () => { wheelPendingColor = currentWheelColor(); lightboxColor.value = wheelPendingColor; lightboxSaturationValue.value = `${lightboxSaturation.value}%`; lightboxBrightnessValue.value = `${lightboxBrightness.value}%`; placeWheelMarker(wheelHue); };
+  lightboxSaturation.oninput = updateLightboxColor; lightboxBrightness.oninput = updateLightboxColor;
+  lightboxSaturation.onchange = lightboxBrightness.onchange = () => updateRow(selectedIndex, 'screenColor', wheelPendingColor, table, indices);
   shell.querySelectorAll('[data-graph-zoom]').forEach((button) => { button.onclick = () => {
     if (button.dataset.graphZoom === 'fit') { fitGraph(canvas, times); return; }
     else graphView.zoom = Math.max(.22, Math.min(4, graphView.zoom * (button.dataset.graphZoom === 'in' ? 1.2 : 1 / 1.2)));
     persistView(); drawGraph(canvas, times, table, indices);
   }; });
+  shell.querySelectorAll('[data-beat-page]').forEach((button) => { button.onclick = () => {
+    const focus = followPlayback && activePlaybackIndex >= 0 ? activePlaybackIndex : selectedIndex;
+    const pageStart = Math.floor(focus / 36) * 36;
+    selectedIndex = Math.max(0, Math.min(times.length - 1, pageStart + (button.dataset.beatPage === 'next' ? 36 : -36)));
+    followPlayback = false; updateSelectedLabel(shell, times); renderKeyframeEditor(activePlan, activeUpdate, false);
+  }; });
+  const followButton = shell.querySelector('#beat-follow'); if (followButton) followButton.onclick = () => { followPlayback = !followPlayback; if (followPlayback && activePlaybackIndex >= 0) selectedIndex = activePlaybackIndex; renderKeyframeEditor(activePlan, activeUpdate, false); };
   if (graphResize) graphResize.disconnect();
   graphResize = new ResizeObserver(() => drawGraph(canvas, times, table, indices)); graphResize.observe(canvas.parentElement);
+}
+
+export function setKeyframePlaybackTime(elapsedMs) {
+  if (!activePlan?.beatMap || elapsedMs === null || !Number.isFinite(elapsedMs) || elapsedMs < 0 || elapsedMs >= activePlan.durationMs) {
+    if (activePlaybackIndex !== -1) { activePlaybackIndex = -1; activeGraphRedraw?.(); }
+    return;
+  }
+  const times = decodeBeatMap(activePlan.beatMap, activePlan.durationMs); if (!times) return;
+  let low = 0, high = times.length;
+  while (low < high) { const middle = (low + high) >> 1; if (times[middle] <= elapsedMs) low = middle + 1; else high = middle; }
+  const next = low - 1;
+  if (next !== activePlaybackIndex) { activePlaybackIndex = next; activeGraphRedraw?.(); }
 }
 
 export { renderKeyframeEditor };

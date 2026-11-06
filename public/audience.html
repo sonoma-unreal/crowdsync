@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#05060a">
-  <title>Join CrowdSync</title>
+  <title>Join LightSync</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=join-preflight-2">
+  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-brand-refresh-1">
 </head>
 <body class="audience-page">
   <main id="output" class="audience-output" aria-hidden="true"><div class="torch-audience-orb"></div><div id="marquee" class="audience-message" aria-live="polite" hidden></div></main>
   <section id="immersive-gate" class="immersive-gate hidden" aria-labelledby="immersive-title" aria-modal="true" role="dialog"><div class="immersive-gate-panel"><div class="eyebrow">LIGHT OUTPUT READY</div><h1 id="immersive-title">Enter the show</h1><p>Go full screen so the light effect fills your display. Your browser may leave full screen when you leave this page.</p><button id="immersive-enter" class="button button-primary button-large" type="button">Enter full screen</button><p id="immersive-support-note" class="small-copy">Your light stays off until you choose to enter.</p></div></section>
   <header class="audience-header">
-    <a class="brand" href="/"><img class="brand-icon" src="/favicon.svg" alt=""><span>Crowd<span class="brand-light">Sync</span></span></a>
+    <a class="brand" href="/"><img class="brand-icon" src="/favicon.svg" alt=""><span>Light<span class="brand-light">Sync</span></span></a>
     <nav id="audience-tabs" class="audience-tabs hidden" aria-label="Your show">
       <button id="show-tab" class="audience-tab selected" type="button" aria-selected="true"><span>Show</span></button>
       <button id="settings-tab" class="audience-tab" type="button" aria-selected="false"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg><span>Settings</span></button>
@@ -25,7 +25,7 @@
 
   <section id="join-gate" class="join-gate hidden">
     <div class="join-dialog">
-      <div class="eyebrow">JOIN THE SHOW</div><h1 id="show-name">CrowdSync</h1>
+      <div class="eyebrow">JOIN THE SHOW</div><h1 id="show-name">LightSync</h1>
       <p class="muted">Show code <strong id="show-code">------</strong></p>
       <div class="safety-notice"><span class="safety-icon">!</span><div><strong>Photosensitivity notice</strong><p>This show may use rapidly flashing phone torches or screens. It may affect people with photosensitive epilepsy or other light sensitivities. You can opt out at any time; choose whether to participate based on your needs.</p></div></div>
       <label class="consent-row"><input id="consent" type="checkbox"><span>I have read the notice and want to continue.</span></label>
@@ -57,7 +57,7 @@
         <button id="confirm-sync" class="button button-primary" disabled>Confirm sync &amp; join</button>
       </div>
       <p id="sync-readiness" class="small-copy sync-readiness" role="status" aria-live="polite">Connect to the room to continue.</p>
-      <p class="torch-note">If torch access is unavailable or denied, CrowdSync switches to your screen. Listen for the repeating beep and line up your light pulse with the target.</p>
+      <p class="torch-note">If torch access is unavailable or denied, LightSync switches to your screen. Listen for the repeating beep and line up your light pulse with the target.</p>
       <button id="cancel-join" class="text-button">Leave</button>
     </div>
   </section>
@@ -73,11 +73,11 @@
 
 
   <aside id="live-guide" class="live-guide hidden" role="status" aria-live="polite">
-    <div><strong>The show is live</strong><p>Keep this page open. CrowdSync will keep your display awake when your browser allows it. Use Settings to choose Screen or Torch flash; tap Turn off any time.</p></div>
+    <div><strong>The show is live</strong><p>Keep this page open. LightSync will keep your display awake when your browser allows it. Use Settings to choose Screen or Torch flash; tap Turn off any time.</p></div>
     <div class="live-guide-actions"><button id="guide-settings" class="button button-secondary" type="button">Settings</button><button id="dismiss-guide" class="button button-quiet" type="button">Got it</button></div>
   </aside>
   <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button><button id="immersive-exit" class="button button-quiet hidden" type="button">Exit full screen</button></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/audience.js?v=controller-sync-auto-1"></script><script type="module" src="/assets/audience-immersive.js?v=controller-sync-auto-1"></script>
+  <script type="module" src="/assets/audience.js?v=lightsync-brand-refresh-1"></script><script type="module" src="/assets/audience-immersive.js?v=lightsync-brand-refresh-1"></script>
 </body>
 </html>

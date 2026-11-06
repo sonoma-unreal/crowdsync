@@ -1,4 +1,4 @@
-# CrowdSync Phase 3 Security Handoff
+# LightSync Phase 3 Security Handoff
 
 Prepared 2026-10-29 after the repository inspection, security changes, regression suite, dependency audit and synthetic local load runs. This report records code and test evidence; it does not claim certification, production readiness, deployment, or real-device validation.
 
@@ -6,7 +6,7 @@ Prepared 2026-10-29 after the repository inspection, security changes, regressio
 
 ## 1. Architecture and threat model
 
-CrowdSync runs as one Node.js 20+ ES-module process. Fastify serves static pages and JSON APIs, `ws` handles room messaging, and QRCode creates join QR images. Browser clients are vanilla JavaScript. Room state, audience connections, controller sessions, rate-limit timestamps and command counters live in process memory. There is no database, persistent room store, multi-process coordination, account system, or media storage. Rooms close on operator action, expire after 12 hours, and disappear on process exit.
+LightSync runs as one Node.js 20+ ES-module process. Fastify serves static pages and JSON APIs, `ws` handles room messaging, and QRCode creates join QR images. Browser clients are vanilla JavaScript. Room state, audience connections, controller sessions, rate-limit timestamps and command counters live in process memory. There is no database, persistent room store, multi-process coordination, account system, or media storage. Rooms close on operator action, expire after 12 hours, and disappear on process exit.
 
 The primary trust boundary is between the Node server and untrusted browsers. The controller bearer token is scoped by HMAC claims to the operator role, room id, room instance and expiry. Controller HTTP routes authenticate every request. Controller WebSockets authenticate in the first `hello`; audience clients initially use the six-digit public room locator and receive only the audience-visible state. A guest that confirms an active sync test receives a signed audience reconnect token, scoped to the current room instance and remaining room lifetime, so a reconnect can restore confirmed membership. The room code alone does not restore confirmed membership; the legacy client `syncConfirmed` flag is not trusted. Audience command messages are rejected. Strict WebSocket command allowlists, room-scoped monotonic command IDs and server-owned state control privileged changes. The server does not accept client-supplied authority or cue code.
 
@@ -102,7 +102,7 @@ Torch operation still asks for browser camera permission on capable devices beca
 
 ## 7. Cloudflare readiness (no migration performed)
 
-The current Node/Fastify `ws` endpoint can sit behind a Cloudflare proxy that forwards HTTP Upgrade/WebSocket traffic. Cloudflare’s current documentation says proxied WebSockets are supported; it also notes that WAF evaluation covers the initial upgrade request, not messages on an established socket ([WebSockets](https://developers.cloudflare.com/network/websockets/)). CrowdSync therefore retains origin validation, role checks, message schemas, limits and rate guards inside the application.
+The current Node/Fastify `ws` endpoint can sit behind a Cloudflare proxy that forwards HTTP Upgrade/WebSocket traffic. Cloudflare’s current documentation says proxied WebSockets are supported; it also notes that WAF evaluation covers the initial upgrade request, not messages on an established socket ([WebSockets](https://developers.cloudflare.com/network/websockets/)). LightSync therefore retains origin validation, role checks, message schemas, limits and rate guards inside the application.
 
 An actual deployment would need HTTPS at the edge and secure WSS to the public hostname, `PUBLIC_BASE_URL` set to that exact HTTPS origin, and verified forwarding of WebSocket upgrades. The origin should be firewalled to Cloudflare and trusted management sources or otherwise authenticated so direct connections cannot bypass the proxy controls ([Protect your origin server](https://developers.cloudflare.com/fundamentals/security/protect-your-origin-server/)). These settings are not configured or tested here. Suitable edge HTTP limits include room creation and join/API request rates; the provider cannot replace in-app WebSocket message authorization or rate limits.
 

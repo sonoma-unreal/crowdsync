@@ -109,19 +109,25 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   operator.send(JSON.stringify({type:'command',command:'start',commandId:24}));
   const started=await nextMessage(audience,m=>m.state?.status==='running');assert.ok(started.state.startedAt>0);
   await new Promise((resolve)=>setTimeout(resolve,60));
-  operator.send(JSON.stringify({type:'command',command:'marquee',text:'GO TEAM!',commandId:25}));
+  const livePlan={durationMs:15_000,cues:[{at:0,effect:'pulse',rate:1,screenColor:'#ff315a',accentColor:'#ffd21f',group:null}]};
+  operator.send(JSON.stringify({type:'command',command:'show-plan',plan:livePlan,commandId:25}));
+  const livePlanState=await nextMessage(audience,m=>m.state?.showPlan?.cues?.[0]?.screenColor==='#ff315a');
+  assert.equal(livePlanState.state.status,'running');assert.equal(livePlanState.state.startedAt,started.state.startedAt);assert.equal(livePlanState.state.epoch,started.state.epoch);
+  await nextMessage(operator,m=>m.type==='ack'&&m.command==='show-plan');
+  await new Promise(resolve=>setTimeout(resolve,60));
+  operator.send(JSON.stringify({type:'command',command:'marquee',text:'GO TEAM!',commandId:26}));
   await nextMessage(operator,m=>m.type==='ack'&&m.command==='marquee');
   const messageState=await nextMessage(audience,m=>m.state?.marquee==='GO TEAM!');assert.equal(messageState.state.marquee,'GO TEAM!');
   audience.close();if(!audience.__closed)await once(audience,'close');
   audience=await connect(base,'audience',roomA.room.id,undefined,{reconnectToken:joined.reconnectToken});const reconnected=await nextMessage(audience,m=>m.type==='welcome');
   assert.equal(reconnected.state.status,'running');assert.equal(reconnected.state.marquee,'GO TEAM!');assert.equal(typeof reconnected.audienceIndex,'number');assert.equal(reconnected.state.waiting,0);
   const late=await connect(base,'audience',roomA.room.id);const lateState=await nextMessage(late,m=>m.type==='welcome');assert.equal(lateState.state.status,'running');
-  operator.send(JSON.stringify({type:'command',command:'blackout',commandId:26}));
+  operator.send(JSON.stringify({type:'command',command:'blackout',commandId:27}));
   const dark=await nextMessage(audience,m=>m.type==='blackout');assert.equal(dark.state.status,'blackout');
   const otherOperator=await connect(base,'operator',roomB.room.id,roomA.token);
   if(!otherOperator.__closed)await once(otherOperator,'close');assert.equal(otherOperator.__closed,true);
   const cross=await fetch(`${base}/api/operator/state`,{headers:{Authorization:`Bearer ${roomA.token}`}});assert.equal((await cross.json()).state.id,roomA.room.id);
-  operator.send(JSON.stringify({type:'command',command:'stop',commandId:27}));
+  operator.send(JSON.stringify({type:'command',command:'stop',commandId:28}));
   const ended=await nextMessage(audience,m=>m.type==='stop');assert.equal(ended.state.status,'idle');
   const operatorRevoked=once(operator,'close');const closedRoom=await fetch(`${base}/api/operator/close`,{method:'POST',headers:{Authorization:`Bearer ${roomA.token}`}});assert.equal(closedRoom.status,200);assert.equal((await operatorRevoked)[0],1000);
   assert.equal((await fetch(`${base}/api/rooms/${roomA.room.id}`)).status,404);
@@ -162,7 +168,7 @@ test('controller lease pauses the running show and turns output off', async (t) 
 
 test('production security headers and health diagnostics are constrained', async (t) => {
   const port=await freePort(),base=`http://127.0.0.1:${port}`;
-  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:'https://crowdsync.example',SESSION_SECRET:'test-secret-for-production-config-1234567890',NODE_ENV:'production'},stdio:'ignore'});
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:'https://lightsync.example',SESSION_SECRET:'test-secret-for-production-config-1234567890',NODE_ENV:'production'},stdio:'ignore'});
   t.after(()=>child.kill());await waitForServer(base,child);
   const response=await fetch(`${base}/health`),health=await response.json();assert.equal(health.ok,true);assert.equal('process' in health,false);assert.equal('rooms' in health,false);assert.match(response.headers.get('strict-transport-security'),/max-age=31536000/);
   const operatorAsset=await fetch(`${base}/assets/operator.js`);assert.equal(operatorAsset.headers.get('cache-control'),'no-store');

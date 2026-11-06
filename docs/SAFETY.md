@@ -1,6 +1,6 @@
 # Torch safety controls
 
-CrowdSync lighting uses a phone torch when supported, with synchronized full-screen light as a fallback. Audience screens stay dark unless the guest chooses screen output or torch control is unavailable. A phone must explicitly join and accept the photosensitivity notice. The torch-control camera track is used only to switch the flashlight. It is not displayed, read, stored, or uploaded; CrowdSync has no audience video recording feature. Screen output needs no camera permission.
+LightSync lighting uses a phone torch when supported, with synchronized full-screen light as a fallback. Audience screens stay dark unless the guest chooses screen output or torch control is unavailable. A phone must explicitly join and accept the photosensitivity notice. The torch-control camera track is used only to switch the flashlight. It is not displayed, read, stored, or uploaded; LightSync has no audience video recording feature. Screen output needs no camera permission.
 
 Enhanced accessibility protection is enabled for every new room. It caps a pattern at 1.5 device-light on-edges per second, accounting for the number of pulses in that pattern. Turning it off requires the controller to acknowledge this warning:
 

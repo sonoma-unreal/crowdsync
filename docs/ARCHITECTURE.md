@@ -26,7 +26,7 @@ An operator may configure two to six anonymous audience section labels before gu
 - Paused: the phone track is stopped and torch output is requested off; resume continues from the paused effect position. Guests enable their torch again.
 - Blackout: output is disabled immediately, any sync test is canceled, and emergency commands bypass normal command throttling. `Clear blackout` returns the room to idle and requires a fresh sync test.
 - Stop: returns to idle and disables room-wide torch output.
-- Close / 12-hour expiry / process exit: room state and audience connections end and clients disconnect. Room state is not persisted. CrowdSync does not record or retain audience video.
+- Close / 12-hour expiry / process exit: room state and audience connections end and clients disconnect. Room state is not persisted. LightSync does not record or retain audience video.
 
 ## Security and privacy
 

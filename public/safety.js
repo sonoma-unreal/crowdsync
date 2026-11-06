@@ -3,6 +3,7 @@ export const ENHANCED_MAX_FLASHES_PER_SECOND = 1.5;
 export const MIN_TORCH_EDGE_GAP_MS = 1000 / MAX_FLASHES_PER_SECOND;
 export const MAX_SHOW_CUES = 24;
 export const MAX_SHOW_DURATION_MS = 10 * 60 * 1000;
+export const MAX_SHOW_ANCHOR_MS = 12 * 60 * 60 * 1000;
 export const BEAT_MAP_QUANTUM_MS = 20;
 export const MAX_BEAT_EVENTS = 1_800;
 export const MAX_BEAT_MAP_LENGTH = MAX_BEAT_EVENTS * 2;
@@ -103,14 +104,15 @@ function getBeatTimes(plan) {
 // stay in the controller's browser.
 export function normalizeShowPlan(plan, enhancedProtection = true) {
   if (plan === null) return { ok: true, plan: null };
-  if (!plan || Object.getPrototypeOf(plan) !== Object.prototype || Object.keys(plan).some((key) => !['durationMs', 'cues', 'beatMap', 'beatMode', 'beatStyles', 'beatStyleTable'].includes(key))) {
+  if (!plan || Object.getPrototypeOf(plan) !== Object.prototype || Object.keys(plan).some((key) => !['durationMs', 'cues', 'beatMap', 'beatMode', 'beatStyles', 'beatStyleTable', 'anchorMs'].includes(key))) {
     return { ok: false, error: 'Show plan has an invalid structure' };
   }
   if (!Number.isSafeInteger(plan.durationMs) || plan.durationMs < 1_000 || plan.durationMs > MAX_SHOW_DURATION_MS) {
     return { ok: false, error: 'Show duration must be between 1 second and 10 minutes' };
   }
+  if (plan.anchorMs !== undefined && (!Number.isSafeInteger(plan.anchorMs) || plan.anchorMs < 0 || plan.anchorMs > MAX_SHOW_ANCHOR_MS)) return { ok: false, error: 'Show score start offset is invalid' };
   if (plan.beatMap !== undefined && !decodeBeatMap(plan.beatMap, plan.durationMs)) return { ok: false, error: 'Beat keyframes have an invalid structure or timing' };
-  if (plan.beatMode !== undefined && (!['detected', 'tempo-grid'].includes(plan.beatMode) || plan.beatMap === undefined)) return { ok: false, error: 'Beat keyframe mode is unsupported' };
+  if (plan.beatMode !== undefined && (!['detected', 'tempo-grid', 'beat-this'].includes(plan.beatMode) || plan.beatMap === undefined)) return { ok: false, error: 'Beat keyframe mode is unsupported' };
   if (plan.beatStyles !== undefined && plan.beatMap === undefined) return { ok: false, error: 'Beat styles require a beat timeline' };
   if ((plan.beatStyles === undefined) !== (plan.beatStyleTable === undefined)) return { ok: false, error: 'Beat keyframe styles are incomplete' };
   let beatStyles = null, beatStyleTable = null;
@@ -147,7 +149,7 @@ export function normalizeShowPlan(plan, enhancedProtection = true) {
     cues.push({ at: cue.at, effect: normalized.effect, rate: normalized.rate, screenColor: cue.screenColor.toLowerCase(), accentColor: cue.accentColor.toLowerCase(), group: cue.group ?? null });
     previousAt = cue.at;
   }
-  return { ok: true, plan: { durationMs: plan.durationMs, cues, ...(plan.beatMap === undefined ? {} : { beatMap: plan.beatMap }), ...(plan.beatMode === undefined ? {} : { beatMode: plan.beatMode }), ...(beatStyles ? { beatStyles: plan.beatStyles, beatStyleTable } : {}) } };
+  return { ok: true, plan: { durationMs: plan.durationMs, cues, ...(plan.anchorMs === undefined ? {} : { anchorMs: plan.anchorMs }), ...(plan.beatMap === undefined ? {} : { beatMap: plan.beatMap }), ...(plan.beatMode === undefined ? {} : { beatMode: plan.beatMode }), ...(beatStyles ? { beatStyles: plan.beatStyles, beatStyleTable } : {}) } };
 }
 
 export function showCueAt(plan, elapsedMs) {
@@ -164,7 +166,8 @@ export function showCueAt(plan, elapsedMs) {
 
 export function showStateAt(state, serverTimeMs, groupIndex = null) {
   if (!state?.showPlan || state.status !== 'running') return state;
-  const elapsed = serverTimeMs - state.startedAt;
+  const anchorMs = state.showPlan.anchorMs || 0;
+  const elapsed = serverTimeMs - state.startedAt - anchorMs;
   const cue = showCueAt(state.showPlan, elapsed);
   if (!cue || (cue.group !== null && cue.group !== groupIndex)) return { ...state, status: 'idle', torchEnabled: false };
   const beatTimes = getBeatTimes(state.showPlan);
@@ -173,11 +176,11 @@ export function showStateAt(state, serverTimeMs, groupIndex = null) {
     let low = 0, high = beatTimes.length;
     while (low < high) { const middle = (low + high) >> 1; if (beatTimes[middle] <= elapsed) low = middle + 1; else high = middle; }
     beatIndex = low - 1;
-    if (beatIndex >= 0 && elapsed - beatTimes[beatIndex] < BEAT_EVENT_WINDOW_MS) beatPulseAt = state.startedAt + beatTimes[beatIndex];
+    if (beatIndex >= 0 && elapsed - beatTimes[beatIndex] < BEAT_EVENT_WINDOW_MS) beatPulseAt = state.startedAt + anchorMs + beatTimes[beatIndex];
   }
   const styleIndex = beatIndex >= 0 && state.showPlan.beatStyles ? BEAT_MAP_ALPHABET.indexOf(state.showPlan.beatStyles[beatIndex]) : -1;
   const beatStyle = styleIndex >= 0 ? state.showPlan.beatStyleTable?.[styleIndex] : null;
-  return { ...state, effect: beatStyle?.effect || cue.effect, rate: cue.rate, screenColor: beatStyle?.screenColor || cue.screenColor, accentColor: beatStyle?.screenColor || cue.accentColor, startedAt: state.startedAt + cue.at, beatIndex, beatPulseAt };
+  return { ...state, effect: beatStyle?.effect || cue.effect, rate: cue.rate, screenColor: beatStyle?.screenColor || cue.screenColor, accentColor: beatStyle?.screenColor || cue.accentColor, startedAt: state.startedAt + anchorMs + cue.at, beatIndex, beatPulseAt };
 }
 
 const mod = (n, m) => ((n % m) + m) % m;

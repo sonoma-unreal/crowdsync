@@ -14,17 +14,17 @@ Set `PUBLIC_BASE_URL` to the exact origin audience phones can reach before start
 
 ## Phones cannot connect
 
-Confirm the audience URL opens in the phone browser, the room has not expired, and the proxy/firewall permits WebSocket connections. A room disappears on server restart, so create a new show and QR after restarting CrowdSync.
+Confirm the audience URL opens in the phone browser, the room has not expired, and the proxy/firewall permits WebSocket connections. A room disappears on server restart, so create a new show and QR after restarting LightSync.
 
 ## Operator room is unavailable
 
-The operator tab can restore its session metadata, but rooms themselves live only in server memory. If CrowdSync was restarted or the room expired, reconnecting cannot restore that room; the desk marks it unavailable and offers **Start a new show**. Create a new room and share its new QR/code. For a temporary network drop while the server still has the room, the desk retries automatically.
+The operator tab can restore its session metadata, but rooms themselves live only in server memory. If LightSync was restarted or the room expired, reconnecting cannot restore that room; the desk marks it unavailable and offers **Start a new show**. Create a new room and share its new QR/code. For a temporary network drop while the server still has the room, the desk retries automatically.
 
 ## Ngrok WebSocket requests return 403
 
-The browser's `Origin` must exactly equal the configured `PUBLIC_BASE_URL` origin. If the page is opened through an HTTPS tunnel while `.env` still says `http://localhost:3000`, the HTTP page may load but the WebSocket upgrade is rejected by design. Set `PUBLIC_BASE_URL` to the exact current HTTPS origin shown by the tunnel before starting CrowdSync. In PowerShell, set `$env:PUBLIC_BASE_URL='https://<current-tunnel-host>'` before `npm start`. Tunnel hostnames can change between sessions. Restarting CrowdSync discards in-memory rooms; after restart, create a new show and QR code.
+The browser's `Origin` must exactly equal the configured `PUBLIC_BASE_URL` origin. If the page is opened through an HTTPS tunnel while `.env` still says `http://localhost:3000`, the HTTP page may load but the WebSocket upgrade is rejected by design. Set `PUBLIC_BASE_URL` to the exact current HTTPS origin shown by the tunnel before starting LightSync. In PowerShell, set `$env:PUBLIC_BASE_URL='https://<current-tunnel-host>'` before `npm start`. Tunnel hostnames can change between sessions. Restarting LightSync discards in-memory rooms; after restart, create a new show and QR code.
 
 ## Torch control is unavailable
 
-Physical torch requires a browser/device that exposes the camera torch constraint and normally requires HTTPS (except localhost). Choose Torch flash in Settings and accept the browser permission prompt. If permission is denied or the capability is missing, CrowdSync can switch to screen output. Screen mode needs no camera permission and uses the controller's chosen colors; screen effects follow the same update ceiling.
+Physical torch requires a browser/device that exposes the camera torch constraint and normally requires HTTPS (except localhost). Choose Torch flash in Settings and accept the browser permission prompt. If permission is denied or the capability is missing, LightSync can switch to screen output. Screen mode needs no camera permission and uses the controller's chosen colors; screen effects follow the same update ceiling.
 

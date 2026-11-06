@@ -1,4 +1,4 @@
-# CrowdSync Phase 3.1 — Security Verification Report
+# LightSync Phase 3.1 — Security Verification Report
 
 **Date:** 2026-10-29  
 **Scope:** Local repository verification and the controller workflow update requested with the Wildlights reference. No deployment, publication, migration, DNS, tunnel, external service write, or public exposure was performed.
@@ -11,7 +11,7 @@
 
 ## Scope and architecture checked
 
-CrowdSync is a single Node.js ES module process. Fastify serves static vanilla-JavaScript pages and JSON endpoints; `ws` carries controller commands, audience presence and sync state. QRCode produces join links. Rooms, tokens' associated room instances, audience sockets, operator sockets, rate timestamps, counters and controller leases are process-local and ephemeral. There is no database, account system, multi-process coordination, or media storage. The process binds to loopback by default.
+LightSync is a single Node.js ES module process. Fastify serves static vanilla-JavaScript pages and JSON endpoints; `ws` carries controller commands, audience presence and sync state. QRCode produces join links. Rooms, tokens' associated room instances, audience sockets, operator sockets, rate timestamps, counters and controller leases are process-local and ephemeral. There is no database, account system, multi-process coordination, or media storage. The process binds to loopback by default.
 
 Controller API calls use an HMAC bearer token scoped to the operator role, room ID, room instance and expiry. Controller WebSockets authenticate in their first `hello`. Audience clients use a public six-digit room locator to enter the waiting set. Only a valid confirmation during an active sync test grants confirmed membership and a signed audience reconnect token; that token is scoped to the same room instance, expires with the room and cannot authorize controller actions. The old `syncConfirmed` hello field is accepted only as an inert boolean and cannot grant membership. The code and regression test confirm this behavior.
 

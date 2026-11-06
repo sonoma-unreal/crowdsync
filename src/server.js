@@ -169,7 +169,8 @@ function applyCommand(room, message) {
     if (!/^#[\da-f]{6}$/i.test(screenColor) || !/^#[\da-f]{6}$/i.test(accentColor)) return { error: 'Screen colors must be six-digit hex values' };
     room.screenColor = screenColor.toLowerCase(); room.accentColor = accentColor.toLowerCase();
   } else if (cmd === 'show-plan') {
-    if (room.status === 'running') return { error: 'The active score stays locked during a live show; edit its local draft for the next start' };
+    // Live score edits replace only the bounded effect schedule. The room clock,
+    // show epoch, and transport state remain unchanged for every audience phone.
     const result = normalizeShowPlan(message.plan, room.enhancedProtection);
     if (!result.ok) return { error: result.error };
     if (result.plan?.cues.some((cue) => cue.group !== null && cue.group >= room.groups.length)) return { error: 'A cue targets a section that is not configured for this room' };
@@ -187,8 +188,8 @@ function applyCommand(room, message) {
 }
 
 app.get('/health', async () => process.env.NODE_ENV === 'production'
-  ? ({ ok: true, service: 'crowdsync' })
-  : ({ ok: true, service: 'crowdsync', rooms: rooms.size, process: { rssBytes: process.memoryUsage().rss, cpuUserMicros: process.cpuUsage().user, cpuSystemMicros: process.cpuUsage().system, eventLoopDelayMeanMs: Number.isFinite(loopDelay.mean) ? loopDelay.mean / 1e6 : 0, eventLoopDelayMaxMs: loopDelay.max / 1e6 } }));
+  ? ({ ok: true, service: 'lightsync' })
+  : ({ ok: true, service: 'lightsync', rooms: rooms.size, process: { rssBytes: process.memoryUsage().rss, cpuUserMicros: process.cpuUsage().user, cpuSystemMicros: process.cpuUsage().system, eventLoopDelayMeanMs: Number.isFinite(loopDelay.mean) ? loopDelay.mean / 1e6 : 0, eventLoopDelayMaxMs: loopDelay.max / 1e6 } }));
 app.get('/favicon.svg', async (_req, reply) => reply.type('image/svg+xml').send(await fs.readFile(path.join(publicDir, 'favicon.svg'))));
 app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'home.html'))); });
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
@@ -204,7 +205,7 @@ app.get('/join/:id', async (req, reply) => {
   return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html')));
 });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'keyframe-editor.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
   return reply.type(req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8').send(await fs.readFile(path.join(publicDir, req.params.file)));

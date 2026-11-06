@@ -1,4 +1,4 @@
-# CrowdSync project notes
+# LightSync project notes
 
 - Node 20+, ES modules, Fastify HTTP, `ws` realtime transport, QRCode data URLs, vanilla browser clients.
 - Keep room-scoped authorization enforced on the server. Never treat a room id as an operator credential.

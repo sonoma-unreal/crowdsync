@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: crowdsync-official
+    name: lightsync-official
     runtime: node
     plan: free
     region: oregon
@@ -15,7 +15,7 @@ services:
       - key: PUBLIC_BASE_URL
         fromService:
           type: web
-          name: crowdsync-official
+          name: lightsync-official
           envVarKey: RENDER_EXTERNAL_URL
       - key: SESSION_SECRET
         generateValue: true

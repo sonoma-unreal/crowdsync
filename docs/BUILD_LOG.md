@@ -17,7 +17,7 @@
 
 ## 2026-10-29 — Original Show desk and local cue designer
 
-- Used the supplied Wildlights pages and screenshots as a product-workflow reference, then built an independent CrowdSync Show desk with a 96-phone simulated preview, a manual cue sheet, optional anonymous audience sections, and local saved light scores.
+- Used the supplied Wildlights pages and screenshots as a product-workflow reference, then built an independent LightSync Show desk with a 96-phone simulated preview, a manual cue sheet, optional anonymous audience sections, and local saved light scores.
 - Added browser-local audio decode, a heuristic tempo estimate and coarse loudness analysis, and beat-aligned cue generation capped at 24 cues and ten minutes. The audio file stays in the controller browser; the room receives only validated cue timing, effect, colors and optional section targets. Local audio playback schedules against the shared room clock.
 - Audience clients resolve cues from the synchronized room state without per-frame network updates. The server validates plans and groups, applies current safety bounds, and automatically turns output off at score end. Existing torch limits remain authoritative and are also applied by the audience client.
 - Included command name and sequence in rate-limit errors so the operator can identify the rejected action and roll back an optimistic cue-sheet update.
@@ -26,14 +26,14 @@
 
 ## 2026-10-28
 
-- Workspace was empty apart from Git metadata; created a new independent CrowdSync project.
+- Workspace was empty apart from Git metadata; created a new independent LightSync project.
 - Inspected the named source repository at commit `7855e8227b43276f6f8c1f0d3412250b001de951`; details and verified/incomplete inventory are in `REFERENCE_RESEARCH.md`.
 - Also inspected the supplied `crowd-light-show-0_10_0.zip` in place. It is package version 0.10.0 with no Git SHA; its SHA-256 and additional findings are recorded in `REFERENCE_RESEARCH.md`. The archive was read-only reference material, not a source overlay or instruction file.
 - Chose ephemeral in-memory room state for a reliable small deployable core. Operator credentials are HMAC-signed, room-bound bearer tokens. Production startup rejects a missing/weak secret.
 - Implemented room/QR creation, room-local WebSocket presence and control, clock-offset sampling, client-side effect rendering, consent, optional explicit physical torch, safety clamps, blackout/stop, reconnect state delivery, and operator controls.
 - Verification: `npm test` passes (7 tests) and `npm audit --omit=dev` reports zero vulnerabilities. Syntax checks pass for server, auth, safety, and browser scripts. Integration exercises health, operator/audience pages, favicon, two isolated rooms, QR/join URL generation, auth/config rejection, WebSocket clock samples, live state, late join, reconnect, message, blackout, stop, room close, and surviving second room. Browser verification in the local in-app browser created a room, rendered the QR/join link, passed consent, joined as an audience client, started, paused, resumed, delivered a crowd message, and observed synchronized status. The browser automation stalled opening the page's JavaScript blackout confirmation; the WebSocket integration blackout test passes. No physical camera or torch permission was requested.
 - A first integration run found the emergency blackout command could be dropped by the ordinary 45 ms command coalescing. Stop/blackout now bypass that throttle; regression is covered by integration.
-- During the first local browser run on port 3000, request logs included an existing `ngrok-free.dev` Host value. No tunnel was started or configured by this work; the CrowdSync process on port 3000 was stopped after noticing the forwarded requests. The later browser run used loopback port 3012. No CrowdSync server process remains running.
+- During the first local browser run on port 3000, request logs included an existing `ngrok-free.dev` Host value. No tunnel was started or configured by this work; the LightSync process on port 3000 was stopped after noticing the forwarded requests. The later browser run used loopback port 3012. No LightSync server process remains running.
 - Limits: audio, durable storage, advanced VJ integrations, container packaging, external HTTPS, and physical torch/device verification are not included.
 
 ## 2026-10-28 — Torch-only controller and patterns

@@ -13,7 +13,7 @@ async function freePort() {
 async function waitReady(base, child) {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`CrowdSync exited with code ${child.exitCode}`);
+    if (child.exitCode !== null) throw new Error(`LightSync exited with code ${child.exitCode}`);
     try { const response = await fetch(`${base}/health`); if (response.ok) return; } catch { /* server starting */ }
     await delay(50);
   }
