@@ -1,4 +1,4 @@
-import 'dotenv/config';
+if (process.env.NODE_ENV !== 'test') await import('dotenv/config');
 import Fastify from 'fastify';
 import { WebSocketServer, WebSocket } from 'ws';
 import QRCode from 'qrcode';
@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OAuth2Client } from 'google-auth-library';
 import { assertProductionConfig, issueToken, verifyToken } from './auth.js';
+import { createAccountStore, SESSION_COOKIE_MAX_AGE } from './account-store.js';
 import { normalizeShowPlan, normalizeTorchSettings, TORCH_EFFECTS } from './safety.js';
 
 assertProductionConfig();
@@ -29,6 +30,10 @@ const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info', serializers: { req: (request) => ({ method: request.method, url: (() => { try { return new URL(request.url, 'http://localhost').pathname; } catch { return '/'; } })() }) } },
   bodyLimit: 16 * 1024,
 });
+const accountStore = createAccountStore();
+await accountStore.initialize();
+if (!accountStore.persistent && process.env.NODE_ENV === 'production') app.log.warn('DATABASE_URL is not configured; account sessions and saved shows are temporary until the server restarts');
+app.addHook('onClose', async () => accountStore.close());
 const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
 const rooms = new Map();
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
@@ -92,10 +97,22 @@ function googleOauthClient(req) {
   if (!googleAuthEnabled) return null;
   return new OAuth2Client({ clientId: googleClientId, clientSecret: googleClientSecret, redirectUri: googleCallbackUrl(req) });
 }
-function accountFromRequest(req) {
-  const claims = verifyToken(requestCookie(req, 'lightsync_account'));
-  if (!claims || claims.role !== 'account' || typeof claims.sub !== 'string' || typeof claims.email !== 'string') return null;
-  return { sub: claims.sub, email: claims.email, name: typeof claims.name === 'string' ? claims.name : '' };
+async function accountFromRequest(req, reply) {
+  const token = requestCookie(req, 'lightsync_account');
+  const account = await accountStore.readSession(token);
+  if (account) return account;
+  const claims = verifyToken(token);
+  if (claims?.role === 'account' && typeof claims.sub === 'string' && typeof claims.email === 'string') {
+    const name = typeof claims.name === 'string' ? claims.name : '';
+    const profile = { sub: claims.sub, email: claims.email, name, firstName: name.split(/\s+/)[0] || '' };
+    // Keep current users signed in across the account-session format change.
+    if (process.env.NODE_ENV === 'test') return profile;
+    const replacement = await accountStore.createSession(profile);
+    req.lightsyncAccountToken = replacement;
+    reply?.header('Set-Cookie', sessionCookie('lightsync_account', replacement, SESSION_COOKIE_MAX_AGE, req));
+    return profile;
+  }
+  return null;
 }
 function equalText(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string') return false;
@@ -109,6 +126,50 @@ const joinUrl = (id, request) => {
   return `${base}/join/${id}`;
 };
 const roomState = (room) => ({ id: room.id, name: room.name, status: room.status, effect: room.effect, rate: room.rate, torchEnabled: room.torchEnabled, screenMode: room.screenMode, screenColor: room.screenColor, accentColor: room.accentColor, enhancedProtection: room.enhancedProtection, startedAt: room.startedAt, pausedAt: room.pausedAt, epoch: room.epoch, sequence: room.sequence, audience: room.audience.size, waiting: room.waiting.size, groups: room.groups.map((name, index) => ({ index, name, joined: [...room.audience].filter((ws) => ws.groupIndex === index).length })), syncTest: room.syncTest, marquee: room.marquee, showPlan: room.showPlan });
+function savedRoomConfig(room) {
+  return {
+    effect: room.effect,
+    rate: room.rate,
+    enhancedProtection: room.enhancedProtection,
+    screenColor: room.screenColor,
+    accentColor: room.accentColor,
+    groups: room.groups,
+    marquee: room.marquee,
+    showPlan: room.showPlan,
+  };
+}
+function roomFromSavedConfig(id, name, ownerSub, savedShowId, config = {}) {
+  const enhancedProtection = config.enhancedProtection !== false;
+  const requestedEffect = typeof config.effect === 'string' && Object.hasOwn(TORCH_EFFECTS, config.effect) ? config.effect : 'pulse';
+  const requestedRate = typeof config.rate === 'number' && Number.isFinite(config.rate) ? config.rate : 1.2;
+  const look = normalizeTorchSettings(requestedEffect, requestedRate, enhancedProtection);
+  const groups = Array.isArray(config.groups) && config.groups.length >= 2 && config.groups.length <= 6 && config.groups.every((group) => typeof group === 'string' && group.trim().length > 0 && group.trim().length <= 24)
+    ? config.groups.map((group) => group.trim()) : [];
+  const colorsValid = typeof config.screenColor === 'string' && /^#[\da-f]{6}$/i.test(config.screenColor) && typeof config.accentColor === 'string' && /^#[\da-f]{6}$/i.test(config.accentColor);
+  const planResult = normalizeShowPlan(config.showPlan, enhancedProtection);
+  const showPlan = planResult.ok && (!planResult.plan || planResult.plan.cues.every((cue) => cue.group === null || cue.group < groups.length)) ? planResult.plan : null;
+  return {
+    id, instance: crypto.randomUUID(), name, ownerSub, savedShowId,
+    status: 'idle', effect: look.effect, rate: look.rate, enhancedProtection,
+    // Output always starts off when a saved show opens in a new room.
+    torchEnabled: false, screenMode: false,
+    screenColor: colorsValid ? config.screenColor.toLowerCase() : '#25c3e8',
+    accentColor: colorsValid ? config.accentColor.toLowerCase() : '#a855f7',
+    startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0,
+    expiresAt: Date.now() + 12 * 60 * 60 * 1000, audience: new Set(), waiting: new Set(), operators: new Set(), clockProbes: new Map(),
+    audienceIndex: 0, groups, syncTest: { active: false, completed: false, testId: 0, startedAt: 0 },
+    marquee: typeof config.marquee === 'string' ? config.marquee.replace(/[<>]/g, '').trim().slice(0, 90) : '',
+    showPlan,
+  };
+}
+function saveRoomSnapshot(room) {
+  if (!room.ownerSub || !room.savedShowId) return Promise.resolve();
+  const ownerSub = room.ownerSub, savedShowId = room.savedShowId, name = room.name;
+  const config = savedRoomConfig(room);
+  room.saveQueue = (room.saveQueue || Promise.resolve()).catch(() => {}).then(() => accountStore.updateShow(ownerSub, savedShowId, name, config));
+  return room.saveQueue;
+}
+const savedShowCommands = new Set(['effect', 'rate', 'protection', 'screen-colors', 'show-plan', 'groups', 'marquee']);
 const send = (ws, data) => {
   if (ws.readyState !== WebSocket.OPEN) return;
   if (ws.bufferedAmount > 1_048_576) { ws.close(1013, 'Slow client'); return; }
@@ -242,7 +303,11 @@ app.get('/health', async () => process.env.NODE_ENV === 'production'
 app.get('/favicon.svg', async (_req, reply) => reply.type('image/svg+xml').send(await fs.readFile(path.join(publicDir, 'favicon.svg'))));
 app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'home.html'))); });
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
-app.get('/api/auth/me', async (req) => ({ enabled: googleAuthEnabled, user: googleAuthEnabled ? accountFromRequest(req) : null }));
+app.get('/api/auth/me', async (req, reply) => {
+  const user = googleAuthEnabled ? await accountFromRequest(req, reply) : null;
+  if (user && !req.lightsyncAccountToken) reply.header('Set-Cookie', sessionCookie('lightsync_account', requestCookie(req, 'lightsync_account'), SESSION_COOKIE_MAX_AGE, req));
+  return { enabled: googleAuthEnabled, user };
+});
 app.get('/auth/google', async (req, reply) => {
   if (!googleAuthEnabled) return reply.code(503).type('text/plain; charset=utf-8').send('Google sign-in is not configured');
   const rate = consumeRateLimit(googleAuthTimestamps, req.ip, 10, 10 * 60_000);
@@ -279,8 +344,13 @@ app.get('/auth/google/callback', async (req, reply) => {
     const profile = ticket.getPayload();
     const issuerValid = profile?.iss === 'https://accounts.google.com' || profile?.iss === 'accounts.google.com';
     if (!profile || !issuerValid || !equalText(profile.nonce, stateClaims.nonce) || typeof profile.sub !== 'string' || !profile.sub || typeof profile.email !== 'string' || profile.email_verified !== true) return fail();
-    const accountToken = issueToken({ role: 'account', sub: profile.sub, email: profile.email.slice(0, 254), name: String(profile.name || '').slice(0, 120) }, 8 * 60 * 60_000);
-    reply.header('Set-Cookie', [clearState, sessionCookie('lightsync_account', accountToken, 8 * 60 * 60, req)]);
+    const accountToken = await accountStore.createSession({
+      sub: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      firstName: profile.given_name,
+    });
+    reply.header('Set-Cookie', [clearState, sessionCookie('lightsync_account', accountToken, SESSION_COOKIE_MAX_AGE, req)]);
     return reply.redirect('/host');
   } catch {
     req.log.warn('Google sign-in callback failed');
@@ -289,8 +359,58 @@ app.get('/auth/google/callback', async (req, reply) => {
 });
 app.post('/auth/logout', async (req, reply) => {
   if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
+  await accountStore.revokeSession(requestCookie(req, 'lightsync_account'));
   reply.header('Set-Cookie', sessionCookie('lightsync_account', '', 0, req));
   return reply.code(204).send();
+});
+app.get('/api/account/shows', async (req, reply) => {
+  const account = await accountFromRequest(req, reply);
+  if (!account) return reply.code(401).send({ error: 'Sign in to view your saved shows' });
+  const savedShows = await accountStore.listShows(account.sub);
+  return {
+    persistence: accountStore.persistent ? 'database' : 'temporary',
+    shows: savedShows.map((show) => {
+      const activeRoom = [...rooms.values()].find((room) => room.savedShowId === show.id && room.ownerSub === account.sub && room.expiresAt > Date.now());
+      return {
+        id: show.id,
+        name: show.name,
+        createdAt: new Date(show.createdAt).toISOString(),
+        updatedAt: new Date(show.updatedAt).toISOString(),
+        activeRoom: activeRoom ? { code: activeRoom.id, status: activeRoom.status } : null,
+      };
+    }),
+  };
+});
+app.post('/api/account/shows/:id/continue', async (req, reply) => {
+  const account = await accountFromRequest(req, reply);
+  if (!account) return reply.code(401).send({ error: 'Sign in to continue a saved show' });
+  if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(req.params.id)) return reply.code(404).send({ error: 'Saved show not found' });
+  const saved = await accountStore.getShow(account.sub, req.params.id);
+  if (!saved) return reply.code(404).send({ error: 'Saved show not found' });
+  let room = [...rooms.values()].find((candidate) => candidate.savedShowId === saved.id && candidate.ownerSub === account.sub && candidate.expiresAt > Date.now());
+  if (!room) {
+    if (rooms.size >= maxRooms) return reply.code(503).send({ error: 'Room capacity reached' });
+    let id;
+    do { id = String(crypto.randomInt(100000, 1000000)); } while (rooms.has(id));
+    room = roomFromSavedConfig(id, saved.name, account.sub, saved.id, saved.config);
+    rooms.set(id, room);
+    await saveRoomSnapshot(room);
+  }
+  const token = issueToken({ role: 'operator', room: room.id, instance: room.instance });
+  const url = joinUrl(room.id, req);
+  const qr = await QRCode.toDataURL(url, { width: 280, margin: 1, color: { dark: '#07110f', light: '#ffffff' } });
+  return { room: roomState(room), token, url, qr };
+});
+app.delete('/api/account/shows/:id', async (req, reply) => {
+  const account = await accountFromRequest(req, reply);
+  if (!account) return reply.code(401).send({ error: 'Sign in to delete a saved show' });
+  if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(req.params.id)) return reply.code(404).send({ error: 'Saved show not found' });
+  const deleted = await accountStore.deleteShow(account.sub, req.params.id);
+  if (!deleted) return reply.code(404).send({ error: 'Saved show not found' });
+  for (const room of rooms.values()) if (room.ownerSub === account.sub && room.savedShowId === req.params.id) room.savedShowId = null;
+  return { ok: true };
 });
 app.get('/join/:id', async (req, reply) => {
   reply.header('Cache-Control', 'no-store');
@@ -311,7 +431,7 @@ app.get('/assets/:file', async (req, reply) => {
 });
 
 app.post('/api/rooms', async (req, reply) => {
-  const account = accountFromRequest(req);
+  const account = await accountFromRequest(req, reply);
   if (!account) return reply.code(401).send({ error: 'Sign in with Google before creating a show' });
   if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
   const rate = consumeRateLimit(createTimestamps, req.ip, 6, 60_000);
@@ -321,7 +441,15 @@ app.post('/api/rooms', async (req, reply) => {
   if (!name) return reply.code(400).send({ error: 'Enter a show name' });
   let id;
   do { id = String(crypto.randomInt(100000, 1000000)); } while (rooms.has(id));
-  const room = { id, instance: crypto.randomUUID(), name, status: 'idle', effect: 'pulse', rate: 1.2, enhancedProtection: true, torchEnabled: false, screenMode: false, screenColor: '#25c3e8', accentColor: '#a855f7', startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0, expiresAt: Date.now() + 12 * 60 * 60 * 1000, audience: new Set(), waiting: new Set(), operators: new Set(), clockProbes: new Map(), audienceIndex: 0, groups: [], syncTest: { active: false, completed: false, testId: 0, startedAt: 0 }, marquee: '', showPlan: null };
+  const room = roomFromSavedConfig(id, name, account.sub, null);
+  let savedShowId;
+  try {
+    savedShowId = await accountStore.createShow(account.sub, name, savedRoomConfig(room));
+  } catch (error) {
+    req.log.error({ error: error.message }, 'Could not create saved show');
+    return reply.code(503).send({ error: 'Show storage is unavailable right now. Try again shortly.' });
+  }
+  room.savedShowId = savedShowId;
   rooms.set(id, room);
   const token = issueToken({ role: 'operator', room: id, instance: room.instance });
   const url = joinUrl(id, req);
@@ -352,6 +480,10 @@ app.post('/api/operator/command', async (req, reply) => {
   auth.room.lastCommandId = req.body.commandId;
   const result = applyCommand(auth.room, req.body);
   if (result.error) return reply.code(400).send(result);
+  if (savedShowCommands.has(req.body.command)) {
+    try { await saveRoomSnapshot(auth.room); }
+    catch (error) { req.log.error({ error: error.message }, 'Could not update saved show'); return reply.code(503).send({ error: 'The show changed, but its saved setup could not be updated. Check server storage and try again.' }); }
+  }
   return result;
 });
 app.post('/api/operator/close', async (req, reply) => {
@@ -467,7 +599,12 @@ wss.on('connection', (ws) => {
         ws.lastCommandAt = Date.now();
         const result = applyCommand(ws.room, message);
         if (result.error) send(ws, { type: 'error', command: message.command, commandId: message.commandId, message: result.error });
-        else send(ws, { type: 'ack', command: message.command });
+        else if (savedShowCommands.has(message.command)) {
+          saveRoomSnapshot(ws.room).then(
+            () => send(ws, { type: 'ack', command: message.command, commandId: message.commandId }),
+            (error) => { app.log.error({ error: error.message }, 'Could not update saved show'); send(ws, { type: 'error', command: message.command, commandId: message.commandId, message: 'The show changed, but its saved setup could not be updated. Check server storage and try again.' }); },
+          );
+        } else send(ws, { type: 'ack', command: message.command });
       } else send(ws, { type: 'error', command: message.command, commandId: message.commandId, message: 'Control update was rate limited; the latest value may not have applied' });
     } else return ws.close(1008, 'Unsupported message type');
   });

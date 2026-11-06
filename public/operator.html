@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-brand-refresh-1">
+  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-host-auth-1">
 </head>
 <body class="operator-page">
   <header class="topbar operator-topbar">
@@ -23,10 +23,34 @@
     <button id="blackout" class="button blackout-top hidden" type="button">BLACKOUT</button>
   </header>
   <main class="operator-shell">
-    <section id="setup" class="setup-card"><div class="eyebrow">SYNCHRONIZED CROWD LIGHTS</div><h1>Light up <em>the crowd.</em></h1><p>Create a show, share one QR code, and let each guest choose screen or torch output on their phone.</p>
-      <div id="host-auth" class="host-auth"><p id="auth-message">Sign in or create an account with Google to host a show.</p><a id="google-sign-in" class="button button-primary button-large" href="/auth/google">Continue with Google</a></div>
-      <form id="create-form" class="hidden"><label for="show-name">Show name</label><div class="create-row"><input id="show-name" maxlength="48" required placeholder="Friday night lights"><button type="submit" class="button button-primary button-large">Create show</button></div></form>
-      <p class="fine-print">Guests can use a phone torch or synchronized screen light. Each phone joins with output off until the guest enables a light.</p></section>
+    <section id="setup" class="setup-card">
+      <div class="setup-story">
+        <div class="eyebrow">LIGHTSYNC <span aria-hidden="true">/</span> HOST CONTROL</div>
+        <h1>Bring the room<br><em>into sync.</em></h1>
+        <p>Build the look, share one code, and turn a room full of phones into one coordinated light show.</p>
+        <div class="host-highlights" aria-label="LightSync hosting features">
+          <div><span class="host-highlight-mark" aria-hidden="true"></span><span><strong>Shape the light</strong><small>Effects, color, and beat cues</small></span></div>
+          <div><span class="host-highlight-mark" aria-hidden="true"></span><span><strong>Bring everyone in</strong><small>One code and QR for the room</small></span></div>
+          <div><span class="host-highlight-mark" aria-hidden="true"></span><span><strong>Keep control</strong><small>Guests choose screen or torch</small></span></div>
+        </div>
+      </div>
+      <div class="setup-entry">
+        <div class="setup-entry-heading"><div class="eyebrow">HOST ACCESS</div><h2 id="setup-title">Start a show</h2></div>
+        <div id="host-auth" class="host-auth">
+          <p id="auth-message">Sign in or create an account with Google to host a show.</p>
+          <a id="google-sign-in" class="button button-primary button-large" href="/auth/google"><span class="google-mark" aria-hidden="true">G</span><span>Continue with Google</span><span class="google-arrow" aria-hidden="true">→</span></a>
+          <small>New to LightSync? Your host account is ready when you sign in.</small>
+        </div>
+        <section id="saved-show-library" class="saved-show-library hidden" aria-labelledby="saved-show-title">
+          <div class="saved-show-library-heading"><div><div class="eyebrow">YOUR LIGHTSYNC LIBRARY</div><h3 id="saved-show-title">Saved shows</h3></div><span id="saved-show-count" class="saved-show-count">0 SHOWS</span></div>
+          <p id="saved-show-storage" class="saved-show-storage hidden" role="status"></p>
+          <div id="saved-show-list" class="saved-show-list"></div>
+          <p id="saved-show-empty" class="saved-show-empty hidden">Your saved shows will appear here after you create one.</p>
+        </section>
+        <form id="create-form" class="host-create-form hidden"><label for="show-name">Show name</label><div class="create-row"><input id="show-name" maxlength="48" required placeholder="Friday night lights"><button type="submit" class="button button-primary button-large">Start a new show <span aria-hidden="true">→</span></button></div></form>
+        <div class="setup-entry-footer"><span class="status-square" aria-hidden="true"></span><span>Guests join with lights off until they choose an output.</span></div>
+      </div>
+    </section>
     <section id="console" class="hidden">
       <div class="console-heading"><div><div class="eyebrow">SHOW CONTROL</div><h1 id="room-name">Your show</h1><span id="room-id" class="muted"></span></div><div class="console-heading-actions"><button id="end-show" class="button button-quiet">End show</button><button id="new-show" class="button button-primary hidden">Start a new show</button></div></div>
       <section class="desk-status" aria-label="Live diagnostics"><div><span class="desk-label">NETWORK</span><strong id="network-health">MEASURING</strong></div><div><span class="desk-label">BEST ROUND TRIP</span><strong id="network-rtt">—</strong></div><div><span class="desk-label">ROOM CLOCK MAP</span><strong id="clock-offset" title="Internal mapping between this browser timer and the room timer. Network delay is shown separately as round trip.">—</strong><small class="clock-help">Internal timer mapping · refreshed every 10 s</small></div><div><span class="desk-label">STATE SEQUENCE</span><strong id="state-sequence">0</strong></div><div><span class="desk-label">CONNECTED NOW</span><strong id="connected-count">0</strong></div></section>

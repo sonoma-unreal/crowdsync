@@ -5,3 +5,4 @@ data/
 *.log
 .reference-crowd-light-show/
 .codex-remote-attachments/
+.neon

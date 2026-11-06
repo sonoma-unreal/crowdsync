@@ -22,8 +22,8 @@ async function waitForServer(base, child) {
   }
   throw new Error('server did not become ready');
 }
-function accountCookie(secret = TEST_SESSION_SECRET) {
-  const body = Buffer.from(JSON.stringify({ role:'account', sub:'test-google-subject', email:'host@example.test', name:'Test Host', exp:Date.now()+60_000 })).toString('base64url');
+function accountCookie(secret = TEST_SESSION_SECRET, sub = 'test-google-subject') {
+  const body = Buffer.from(JSON.stringify({ role:'account', sub, email:`${sub}@example.test`, name:'Test Host', exp:Date.now()+60_000 })).toString('base64url');
   const signature = crypto.createHmac('sha256', secret).update(body).digest('base64url');
   return `lightsync_account=${body}.${signature}`;
 }
@@ -41,6 +41,42 @@ test('Google account is required to create a room and sign-in is configurable', 
   const anonymous=await fetch(`${base}/api/rooms`,{method:'POST',headers:{'content-type':'application/json',Origin:base},body:JSON.stringify({name:'No account'})});assert.equal(anonymous.status,401);
   const wrongOrigin=await fetch(`${base}/api/rooms`,{method:'POST',headers:{'content-type':'application/json',Origin:'https://attacker.example',Cookie:accountCookie()},body:JSON.stringify({name:'Cross origin'})});assert.equal(wrongOrigin.status,403);
   const authenticated=await fetch(`${base}/api/auth/me`,{headers:{Cookie:accountCookie()}});assert.deepEqual(await authenticated.json(),{enabled:false,user:null});
+});
+
+test('saved shows are isolated by account and reopen with the saved safe configuration', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`,cookie=accountCookie();
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,DATABASE_URL:'',NODE_ENV:'test'},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const created=await create(base,'Friday lights');
+  const headers={Cookie:cookie,Origin:base,'Content-Type':'application/json'};
+  const mutationHeaders={Cookie:cookie,Origin:base};
+  const libraryResponse=await fetch(`${base}/api/account/shows`,{headers});assert.equal(libraryResponse.status,200);
+  const library=await libraryResponse.json();assert.equal(library.persistence,'temporary');assert.equal(library.shows.length,1);
+  const saved=library.shows[0];assert.equal(saved.name,'Friday lights');assert.equal(saved.activeRoom.code,created.room.id);
+  const otherHeaders={Cookie:accountCookie(TEST_SESSION_SECRET,'another-account'),Origin:base};
+  const wrongContinue=await fetch(`${base}/api/account/shows/${saved.id}/continue`,{method:'POST',headers:otherHeaders});assert.equal(wrongContinue.status,404,await wrongContinue.text());
+  const wrongDelete=await fetch(`${base}/api/account/shows/${saved.id}`,{method:'DELETE',headers:otherHeaders});assert.equal(wrongDelete.status,404,await wrongDelete.text());
+  const changed=await fetch(`${base}/api/operator/command`,{method:'POST',headers:{Authorization:`Bearer ${created.token}`,'Content-Type':'application/json'},body:JSON.stringify({command:'screen-colors',commandId:1,screenColor:'#6f54e8',accentColor:'#28d7bf'})});
+  assert.equal(changed.status,200);
+  const ended=await fetch(`${base}/api/operator/close`,{method:'POST',headers:{Authorization:`Bearer ${created.token}`}});assert.equal(ended.status,200);
+  const reopenedResponse=await fetch(`${base}/api/account/shows/${saved.id}/continue`,{method:'POST',headers:mutationHeaders});assert.equal(reopenedResponse.status,200);
+  const reopened=await reopenedResponse.json();assert.notEqual(reopened.room.id,created.room.id);assert.equal(reopened.room.screenColor,'#6f54e8');assert.equal(reopened.room.accentColor,'#28d7bf');assert.equal(reopened.room.torchEnabled,false);assert.equal(reopened.room.screenMode,false);
+  const removed=await fetch(`${base}/api/account/shows/${saved.id}`,{method:'DELETE',headers:mutationHeaders});assert.equal(removed.status,200);
+  assert.equal((await (await fetch(`${base}/api/account/shows`,{headers})).json()).shows.length,0);
+  assert.equal((await fetch(`${base}/api/rooms/${reopened.room.id}`)).status,200,'deleting a saved setup does not close its active room');
+});
+
+test('long-lived account cookies renew and sign-out revokes the server session', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`;
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,DATABASE_URL:'',GOOGLE_CLIENT_ID:'lightsync-test.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'test-client-secret',GOOGLE_CALLBACK_URL:'',NODE_ENV:'development'},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const legacy=await fetch(`${base}/api/auth/me`,{headers:{Cookie:accountCookie()}});assert.equal(legacy.status,200);
+  const signedIn=await legacy.json();assert.equal(signedIn.user.firstName,'Test');
+  const sessionCookie=legacy.headers.get('set-cookie');assert.match(sessionCookie,/Max-Age=315360000/);assert.match(sessionCookie,/HttpOnly/);
+  const cookiePair=sessionCookie.split(';',1)[0];
+  const stillSignedIn=await fetch(`${base}/api/auth/me`,{headers:{Cookie:cookiePair}});assert.equal((await stillSignedIn.json()).user.email,'test-google-subject@example.test');
+  const logout=await fetch(`${base}/auth/logout`,{method:'POST',headers:{Origin:base,Cookie:cookiePair}});assert.equal(logout.status,204);
+  const signedOut=await fetch(`${base}/api/auth/me`,{headers:{Cookie:cookiePair}});assert.equal((await signedOut.json()).user,null);
 });
 
 test('Google OAuth start uses state, nonce, and PKCE with the configured Lightsync callback', async (t) => {
@@ -117,6 +153,7 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   const initialSequence=stateWithGuest.state.sequence;assert.ok(Number.isSafeInteger(initialSequence));
   operator.send(JSON.stringify({type:'command',command:'effect',effect:'twinkle',commandId:11}));
   const effectState=await nextMessage(operator,m=>m.state?.effect==='twinkle');assert.ok(effectState.state.sequence>initialSequence);
+  const firstEffectAck=await nextMessage(operator,m=>m.type==='ack'&&m.commandId===11);assert.notEqual(firstEffectAck.duplicate,true);
   operator.send(JSON.stringify({type:'command',command:'effect',effect:'beacon',commandId:11}));
   const duplicate=await nextMessage(operator,m=>m.type==='ack'&&m.commandId===11);assert.equal(duplicate.duplicate,true);
   const operatorReconnect=await connect(base,'operator',roomA.room.id,roomA.token);await nextMessage(operatorReconnect,m=>m.type==='welcome');operatorReconnect.send(JSON.stringify({type:'command',command:'effect',effect:'beacon',commandId:11}));const replay=await nextMessage(operatorReconnect,m=>m.type==='ack'&&m.commandId===11);assert.equal(replay.duplicate,true);operatorReconnect.close();
