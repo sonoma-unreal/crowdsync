@@ -6,6 +6,9 @@ import net from 'node:net';
 import { once } from 'node:events';
 import { WebSocket } from 'ws';
 
+const TEST_SESSION_SECRET = 'integration-test-session-secret-0123456789';
+process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+
 async function freePort() {
   const server = net.createServer(); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const { port } = server.address(); await new Promise((resolve) => server.close(resolve)); return port;
@@ -19,10 +22,38 @@ async function waitForServer(base, child) {
   }
   throw new Error('server did not become ready');
 }
-async function create(base, name) {
-  const res = await fetch(`${base}/api/rooms`, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({name}) });
+function accountCookie(secret = TEST_SESSION_SECRET) {
+  const body = Buffer.from(JSON.stringify({ role:'account', sub:'test-google-subject', email:'host@example.test', name:'Test Host', exp:Date.now()+60_000 })).toString('base64url');
+  const signature = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+  return `lightsync_account=${body}.${signature}`;
+}
+async function create(base, name, secret = TEST_SESSION_SECRET, origin = base) {
+  const res = await fetch(`${base}/api/rooms`, { method:'POST', headers:{'content-type':'application/json',Origin:origin,Cookie:accountCookie(secret)}, body:JSON.stringify({name}) });
   const data = await res.json(); assert.equal(res.status, 200); return data;
 }
+
+test('Google account is required to create a room and sign-in is configurable', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`;
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,NODE_ENV:'test',GOOGLE_CLIENT_ID:'',GOOGLE_CLIENT_SECRET:'',GOOGLE_CALLBACK_URL:''},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const me=await fetch(`${base}/api/auth/me`);assert.deepEqual(await me.json(),{enabled:false,user:null});
+  assert.equal((await fetch(`${base}/auth/google`,{redirect:'manual'})).status,503);
+  const anonymous=await fetch(`${base}/api/rooms`,{method:'POST',headers:{'content-type':'application/json',Origin:base},body:JSON.stringify({name:'No account'})});assert.equal(anonymous.status,401);
+  const wrongOrigin=await fetch(`${base}/api/rooms`,{method:'POST',headers:{'content-type':'application/json',Origin:'https://attacker.example',Cookie:accountCookie()},body:JSON.stringify({name:'Cross origin'})});assert.equal(wrongOrigin.status,403);
+  const authenticated=await fetch(`${base}/api/auth/me`,{headers:{Cookie:accountCookie()}});assert.deepEqual(await authenticated.json(),{enabled:false,user:null});
+});
+
+test('Google OAuth start uses state, nonce, and PKCE with the configured Lightsync callback', async (t) => {
+  const port=await freePort(),base=`http://127.0.0.1:${port}`,callback=`${base}/auth/google/callback`;
+  const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,GOOGLE_CLIENT_ID:'lightsync-test.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'test-client-secret',GOOGLE_CALLBACK_URL:callback,NODE_ENV:'test'},stdio:'ignore'});
+  t.after(()=>child.kill());await waitForServer(base,child);
+  const start=await fetch(`${base}/auth/google`,{redirect:'manual'});assert.equal(start.status,302);
+  const authorization=new URL(start.headers.get('location'));assert.equal(authorization.origin,'https://accounts.google.com');assert.equal(authorization.searchParams.get('client_id'),'lightsync-test.apps.googleusercontent.com');
+  assert.equal(authorization.searchParams.get('redirect_uri'),callback);assert.equal(authorization.searchParams.get('response_type'),'code');assert.equal(authorization.searchParams.get('code_challenge_method'),'S256');assert.ok(authorization.searchParams.get('code_challenge'));assert.ok(authorization.searchParams.get('nonce'));assert.ok(authorization.searchParams.get('state'));
+  assert.deepEqual(new Set(authorization.searchParams.get('scope').split(' ')),new Set(['openid','email','profile']));
+  assert.match(start.headers.get('set-cookie'),/HttpOnly/);assert.match(start.headers.get('set-cookie'),/SameSite=Lax/);
+  const invalid=await fetch(`${base}/auth/google/callback?error=access_denied`,{redirect:'manual'});assert.equal(invalid.status,302);assert.equal(invalid.headers.get('location'),'/host?auth=error');
+});
 function connect(base, role, room, token, extra = {}) {
   const ws = new WebSocket(base.replace('http','ws') + '/ws', { headers: { Origin: base } });
   ws.__messages=[];ws.__waiters=[];ws.__closed=false;ws.on('close',code=>{ws.__closed=true;ws.__closeCode=code});
@@ -229,7 +260,7 @@ test('operator token expiry closes an already-connected WebSocket', async (t) =>
   const port=await freePort(),base=`http://127.0.0.1:${port}`,secret='phase3-verification-test-secret-0123456789';
   const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,NODE_ENV:'test',SESSION_SECRET:secret},stdio:'ignore'});
   t.after(()=>child.kill());await waitForServer(base,child);
-  const created=await create(base,'Expiring operator'),expiresAt=Date.now()+1500,token=resignToken(created.token,secret,expiresAt);
+  const created=await create(base,'Expiring operator',secret),expiresAt=Date.now()+1500,token=resignToken(created.token,secret,expiresAt);
   const operator=await connect(base,'operator',created.room.id,token);await nextMessage(operator,m=>m.type==='welcome');
   assert.equal((await fetch(`${base}/api/operator/state`,{headers:{Authorization:`Bearer ${token}`}})).status,200);
   const closeCode=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('expired operator socket remained open')),3500);operator.once('close',code=>{clearTimeout(timer);resolve(code)})});assert.equal(closeCode,1008);
@@ -240,7 +271,7 @@ test('configured public origin accepts its exact reverse-proxy WebSocket origin 
   const port=await freePort(),base=`http://127.0.0.1:${port}`,publicOrigin='https://show.example.test';
   const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:publicOrigin,NODE_ENV:'test'},stdio:'ignore'});
   t.after(()=>child.kill());await waitForServer(base,child);
-  const created=await create(base,'Proxy origin');assert.ok(created.url.startsWith(`${publicOrigin}/join/`));
+  const created=await create(base,'Proxy origin',TEST_SESSION_SECRET,publicOrigin);assert.ok(created.url.startsWith(`${publicOrigin}/join/`));
   const accepted=new WebSocket(base.replace('http','ws')+'/ws',{headers:{Origin:publicOrigin}});
   const welcome=new Promise((resolve,reject)=>{accepted.once('error',reject);accepted.on('message',raw=>{const message=JSON.parse(raw.toString());if(message.type==='welcome')resolve(message)})});
   await once(accepted,'open');accepted.send(JSON.stringify({type:'hello',role:'operator',room:created.room.id,token:created.token}));

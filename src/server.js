@@ -7,6 +7,7 @@ import { performance, monitorEventLoopDelay } from 'node:perf_hooks';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { OAuth2Client } from 'google-auth-library';
 import { assertProductionConfig, issueToken, verifyToken } from './auth.js';
 import { normalizeShowPlan, normalizeTorchSettings, TORCH_EFFECTS } from './safety.js';
 
@@ -16,6 +17,13 @@ const publicDir = path.join(root, 'public');
 const configuredBase = process.env.PUBLIC_BASE_URL ? new URL(process.env.PUBLIC_BASE_URL) : null;
 if (configuredBase && (!['http:', 'https:'].includes(configuredBase.protocol) || configuredBase.username || configuredBase.password || configuredBase.pathname !== '/' || configuredBase.search || configuredBase.hash)) {
   throw new Error('PUBLIC_BASE_URL must be an HTTP(S) origin without credentials or a path');
+}
+const googleClientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+const googleClientSecret = String(process.env.GOOGLE_CLIENT_SECRET || '').trim();
+const googleAuthEnabled = Boolean(googleClientId && googleClientSecret);
+const configuredGoogleCallback = process.env.GOOGLE_CALLBACK_URL ? new URL(process.env.GOOGLE_CALLBACK_URL) : null;
+if (configuredGoogleCallback && (configuredGoogleCallback.pathname !== '/auth/google/callback' || configuredGoogleCallback.search || configuredGoogleCallback.hash || configuredGoogleCallback.username || configuredGoogleCallback.password || !['http:', 'https:'].includes(configuredGoogleCallback.protocol) || (process.env.NODE_ENV === 'production' && configuredGoogleCallback.protocol !== 'https:') || (configuredBase && configuredGoogleCallback.origin !== configuredBase.origin))) {
+  throw new Error('GOOGLE_CALLBACK_URL must be the /auth/google/callback URL on PUBLIC_BASE_URL (HTTPS in production)');
 }
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info', serializers: { req: (request) => ({ method: request.method, url: (() => { try { return new URL(request.url, 'http://localhost').pathname; } catch { return '/'; } })() }) } },
@@ -39,6 +47,7 @@ const roomLookupsPerMinute = positiveLimit('ROOM_LOOKUPS_PER_MINUTE', 300, 60000
 const operatorCommandsPerWindow = positiveLimit('OPERATOR_COMMANDS_PER_10_SECONDS', 200, 2000);
 const startLeadMs = 1200;
 const createTimestamps = new Map();
+const googleAuthTimestamps = new Map();
 const roomLookupTimestamps = new Map();
 const operatorCommandTimestamps = new Map();
 function consumeRateLimit(map, key, limit, windowMs, now = Date.now()) {
@@ -52,6 +61,46 @@ function consumeRateLimit(map, key, limit, windowMs, now = Date.now()) {
   if (!map.has(key) && map.size >= 5000) map.delete(map.keys().next().value);
   map.delete(key); map.set(key, recent);
   return { allowed: true, retryAfter: 0 };
+}
+function siteOrigin(req) {
+  if (configuredBase) return configuredBase.origin;
+  const host = String(req.headers.host || 'localhost');
+  const safeHost = /^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host) || /^\[[a-f0-9:]+\](?::\d{1,5})?$/i.test(host) ? host : 'localhost';
+  return `${req.protocol === 'https' ? 'https' : 'http'}://${safeHost}`;
+}
+function hasSameOrigin(req) {
+  if (typeof req.headers.origin !== 'string') return false;
+  try { return new URL(req.headers.origin).origin === siteOrigin(req); } catch { return false; }
+}
+function requestCookie(req, name) {
+  const prefix = `${name}=`;
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const cookie = part.trim();
+    if (!cookie.startsWith(prefix)) continue;
+    try { return decodeURIComponent(cookie.slice(prefix.length)); } catch { return ''; }
+  }
+  return '';
+}
+function sessionCookie(name, value, maxAge, req) {
+  const secure = process.env.NODE_ENV === 'production' || siteOrigin(req).startsWith('https://');
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+function googleCallbackUrl(req) {
+  return configuredGoogleCallback?.toString() || `${siteOrigin(req)}/auth/google/callback`;
+}
+function googleOauthClient(req) {
+  if (!googleAuthEnabled) return null;
+  return new OAuth2Client({ clientId: googleClientId, clientSecret: googleClientSecret, redirectUri: googleCallbackUrl(req) });
+}
+function accountFromRequest(req) {
+  const claims = verifyToken(requestCookie(req, 'lightsync_account'));
+  if (!claims || claims.role !== 'account' || typeof claims.sub !== 'string' || typeof claims.email !== 'string') return null;
+  return { sub: claims.sub, email: claims.email, name: typeof claims.name === 'string' ? claims.name : '' };
+}
+function equalText(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return false;
+  const a = Buffer.from(left), b = Buffer.from(right);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 const joinUrl = (id, request) => {
   const host = String(request.headers.host || 'localhost');
@@ -193,6 +242,56 @@ app.get('/health', async () => process.env.NODE_ENV === 'production'
 app.get('/favicon.svg', async (_req, reply) => reply.type('image/svg+xml').send(await fs.readFile(path.join(publicDir, 'favicon.svg'))));
 app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'home.html'))); });
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
+app.get('/api/auth/me', async (req) => ({ enabled: googleAuthEnabled, user: googleAuthEnabled ? accountFromRequest(req) : null }));
+app.get('/auth/google', async (req, reply) => {
+  if (!googleAuthEnabled) return reply.code(503).type('text/plain; charset=utf-8').send('Google sign-in is not configured');
+  const rate = consumeRateLimit(googleAuthTimestamps, req.ip, 10, 10 * 60_000);
+  if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).type('text/plain; charset=utf-8').send('Too many sign-in attempts; try again shortly.'); }
+  const client = googleOauthClient(req);
+  const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
+  const state = crypto.randomBytes(32).toString('base64url');
+  const nonce = crypto.randomBytes(32).toString('base64url');
+  const stateToken = issueToken({ role: 'google_oauth', state, nonce, codeVerifier }, 10 * 60_000);
+  const authorizationUrl = client.generateAuthUrl({
+    response_type: 'code',
+    scope: ['openid', 'email', 'profile'],
+    state,
+    nonce,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    prompt: 'select_account',
+  });
+  reply.header('Set-Cookie', sessionCookie('lightsync_oauth_state', stateToken, 600, req));
+  return reply.redirect(authorizationUrl);
+});
+app.get('/auth/google/callback', async (req, reply) => {
+  const clearState = sessionCookie('lightsync_oauth_state', '', 0, req);
+  const fail = () => reply.header('Set-Cookie', clearState).redirect('/host?auth=error');
+  const query = req.query && typeof req.query === 'object' ? req.query : {};
+  if (!googleAuthEnabled || typeof query.code !== 'string' || typeof query.state !== 'string') return fail();
+  const stateClaims = verifyToken(requestCookie(req, 'lightsync_oauth_state'));
+  if (!stateClaims || stateClaims.role !== 'google_oauth' || !equalText(stateClaims.state, query.state) || typeof stateClaims.nonce !== 'string' || typeof stateClaims.codeVerifier !== 'string') return fail();
+  try {
+    const client = googleOauthClient(req);
+    const { tokens } = await client.getToken({ code: query.code, codeVerifier: stateClaims.codeVerifier });
+    if (!tokens.id_token) return fail();
+    const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: googleClientId });
+    const profile = ticket.getPayload();
+    const issuerValid = profile?.iss === 'https://accounts.google.com' || profile?.iss === 'accounts.google.com';
+    if (!profile || !issuerValid || !equalText(profile.nonce, stateClaims.nonce) || typeof profile.sub !== 'string' || !profile.sub || typeof profile.email !== 'string' || profile.email_verified !== true) return fail();
+    const accountToken = issueToken({ role: 'account', sub: profile.sub, email: profile.email.slice(0, 254), name: String(profile.name || '').slice(0, 120) }, 8 * 60 * 60_000);
+    reply.header('Set-Cookie', [clearState, sessionCookie('lightsync_account', accountToken, 8 * 60 * 60, req)]);
+    return reply.redirect('/host');
+  } catch {
+    req.log.warn('Google sign-in callback failed');
+    return fail();
+  }
+});
+app.post('/auth/logout', async (req, reply) => {
+  if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
+  reply.header('Set-Cookie', sessionCookie('lightsync_account', '', 0, req));
+  return reply.code(204).send();
+});
 app.get('/join/:id', async (req, reply) => {
   reply.header('Cache-Control', 'no-store');
   const id = req.params.id;
@@ -212,6 +311,9 @@ app.get('/assets/:file', async (req, reply) => {
 });
 
 app.post('/api/rooms', async (req, reply) => {
+  const account = accountFromRequest(req);
+  if (!account) return reply.code(401).send({ error: 'Sign in with Google before creating a show' });
+  if (!hasSameOrigin(req)) return reply.code(403).send({ error: 'Same-origin request required' });
   const rate = consumeRateLimit(createTimestamps, req.ip, 6, 60_000);
   if (!rate.allowed) { reply.header('Retry-After', String(rate.retryAfter)); return reply.code(429).send({ error: 'Room creation limit reached; try again in a minute' }); }
   if (rooms.size >= maxRooms) return reply.code(503).send({ error: 'Room capacity reached' });
