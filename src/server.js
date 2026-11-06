@@ -301,6 +301,8 @@ app.get('/health', async () => process.env.NODE_ENV === 'production'
   ? ({ ok: true, service: 'lightsync' })
   : ({ ok: true, service: 'lightsync', rooms: rooms.size, process: { rssBytes: process.memoryUsage().rss, cpuUserMicros: process.cpuUsage().user, cpuSystemMicros: process.cpuUsage().system, eventLoopDelayMeanMs: Number.isFinite(loopDelay.mean) ? loopDelay.mean / 1e6 : 0, eventLoopDelayMaxMs: loopDelay.max / 1e6 } }));
 app.get('/favicon.svg', async (_req, reply) => reply.type('image/svg+xml').send(await fs.readFile(path.join(publicDir, 'favicon.svg'))));
+app.get('/privacy', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'privacy.html'))); });
+app.get('/terms', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'terms.html'))); });
 app.get('/', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'home.html'))); });
 app.get('/host', async (_req, reply) => { reply.header('Cache-Control', 'no-store'); return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'operator.html'))); });
 app.get('/api/auth/me', async (req, reply) => {
@@ -424,10 +426,11 @@ app.get('/join/:id', async (req, reply) => {
   return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html')));
 });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css', 'google-g-logo.png']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
-  return reply.type(req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8').send(await fs.readFile(path.join(publicDir, req.params.file)));
+  const mimeType = req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : req.params.file.endsWith('.png') ? 'image/png' : 'text/javascript; charset=utf-8';
+  return reply.type(mimeType).send(await fs.readFile(path.join(publicDir, req.params.file)));
 });
 
 app.post('/api/rooms', async (req, reply) => {

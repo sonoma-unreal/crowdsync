@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090909"><meta name="description" content="Learn what LightSync collects, how it is used, who it is shared with, and how to manage or request deletion of your information.">
+  <title>Privacy Policy — LightSync</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-legal-pages-1">
+</head>
+<body class="legal-page">
+  <header class="legal-header"><a class="brand" href="/"><img class="brand-icon" src="/favicon.svg" alt=""><span>Light<span class="brand-light">Sync</span></span></a><a class="legal-back" href="/">Back to LightSync <span aria-hidden="true">↗</span></a></header>
+  <main class="legal-shell">
+    <div class="eyebrow">LIGHTSYNC / LEGAL</div>
+    <h1>Privacy Policy</h1>
+    <p class="legal-updated">Effective November 6, 2026</p>
+    <article class="legal-document">
+      <p>This Privacy Policy explains how LightSync handles information when you visit the site, sign in to host a show, save a show setup, or join a show as an audience member. LightSync is a synchronized phone-light show service operated by Hector, the LightSync project owner.</p>
+      <p><strong>Privacy contact:</strong> <a href="mailto:hector.rxdev@gmail.com">hector.rxdev@gmail.com</a>. This is the contact for privacy questions and requests. LightSync does not currently provide a self-service account-deletion control.</p>
+
+      <h2>1. Information we handle</h2>
+      <h3>Host account information</h3>
+      <p>If you choose “Continue with Google,” Google returns an account identifier, verified email address, display name, and given name through the OpenID Connect scopes <code>openid</code>, <code>email</code>, and <code>profile</code>. LightSync uses those fields to authenticate you, identify the owner of your saved shows, and show your name in the host area. LightSync does not request access to Gmail, Drive, Calendar, contacts, or other Google services.</p>
+      <p>LightSync creates a random sign-in session. The browser stores it in an HttpOnly, SameSite=Lax cookie, marked Secure when served over HTTPS. Its browser lifetime is up to ten years unless you sign out or clear browser data. When PostgreSQL storage is configured, the server stores a hash of the session token, not the raw token. The Google sign-in flow also uses a short-lived state cookie that expires after about ten minutes. Signing out revokes the current session; it does not delete your account profile or saved shows.</p>
+
+      <h3>Saved shows and show settings</h3>
+      <p>When a signed-in host creates a show, LightSync saves that host’s show setup to the account library. This can include the show name, selected effects, timing and rate settings, colors, protection setting, audience section labels, controller message, and timed light cues. It is associated with the Google account identifier so only that account can list, reopen, or delete the saved setup. In the hosted deployment, this account and saved-show data is stored in PostgreSQL provided by Neon.</p>
+      <p>Saved setups do not include the controller’s audio file. Audio selected for beat analysis is read and analyzed in the controller’s browser; LightSync does not upload the audio file. The browser may keep locally saved cue sheets, playlist information, workspace layouts, appearance preferences, and other controller preferences in local browser storage. That information remains on that browser unless browser data is cleared, and is not automatically synchronized to LightSync’s account database.</p>
+
+      <h3>Temporary show and audience information</h3>
+      <p>While a show is active, LightSync temporarily processes its six-digit room code, show name, current effect and color settings, cue plan, section names, synchronization state, and the number and connection state of audience devices. These details are needed to run and synchronize the show. The show name and live show settings are sent to participants who enter its code. Anyone with an active room code may attempt to join, so a code is a public room locator rather than a password.</p>
+      <p>Audience members do not need a LightSync account. LightSync does not ask them for a name, email, phone number, contacts, or location. Their connection, sync result and timing offset, selected output mode, and section choice exist only as needed for the active room. Active room data is held in server memory and is removed when the host ends the room, when it expires (up to 12 hours), or when the server process restarts. It is not stored as audience history in the account database.</p>
+
+      <h3>Device permissions and light output</h3>
+      <p>If an audience member chooses torch output, the browser may request camera permission because the browser’s camera API is used to control the phone’s flashlight. LightSync checks torch capability and applies the torch setting; it does not view, record, store, or upload camera frames or video. Screen-light output does not request camera access. LightSync does not request microphone access.</p>
+
+      <h3>Network and security information</h3>
+      <p>The service uses a visitor’s source IP address in temporary, in-memory rate-limit counters for sign-in, show creation, and invalid room-code checks. These counters are used to limit abuse; LightSync does not keep an IP-address history in its account database or include IP addresses in its application request logs. Application request logs are configured to record a request method and path while omitting query strings, request bodies, cookies, headers, and remote addresses. Error logs may contain technical error details. Render and other infrastructure providers may separately process network or connection information to deliver and secure their services under their own policies.</p>
+
+      <h2>2. Browser storage and cookies</h2>
+      <p>LightSync uses an essential account cookie to keep hosts signed in and a short-lived cookie to protect the Google sign-in flow. It does not set LightSync advertising or analytics cookies. The browser may also store controller preferences and cue sheets in local storage, and room/session information in session storage. Session storage is generally cleared when the tab or browser session ends; local storage remains until it is cleared in the browser’s settings. The controller token and audience reconnect token are access credentials; do not share them or use a device you do not trust.</p>
+
+      <h2>3. How we use information</h2>
+      <ul>
+        <li>Authenticate hosts and maintain their sign-in session.</li>
+        <li>Create, save, reopen, update, and delete show setups at the host’s request.</li>
+        <li>Operate active rooms, send show timing and light settings to participants, and coordinate synchronization.</li>
+        <li>Apply output safeguards and respond to stop, blackout, leave, and room-end events.</li>
+        <li>Limit abusive sign-in, room creation, and invalid-code requests; diagnose failures and keep the service available.</li>
+        <li>Meet legal obligations and protect the service, its users, and the public.</li>
+      </ul>
+      <p>LightSync does not sell personal information, use it for targeted advertising, or build advertising profiles. Google account information is used only for the sign-in, account, and saved-show functions described here.</p>
+
+      <h2>4. When information is shared</h2>
+      <p>LightSync shares only the information needed to provide the service:</p>
+      <ul>
+        <li><strong>Google:</strong> Google authenticates a host and supplies the identity fields listed above. Google also provides the Geist fonts used on the site; loading those fonts causes your browser to connect to Google and disclose standard connection information such as your IP address and browser request metadata. See <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google’s Privacy Policy</a> and <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>.</li>
+        <li><strong>Render:</strong> Render hosts the LightSync web service and may process operational and network information as part of hosting it. See <a href="https://render.com/privacy" rel="noopener noreferrer">Render’s Privacy Policy</a>.</li>
+        <li><strong>Neon:</strong> Neon provides the PostgreSQL database used for host accounts, hashed session tokens, and saved show setups in the hosted deployment. See <a href="https://neon.tech/privacy-policy" rel="noopener noreferrer">Neon’s Privacy Policy</a>.</li>
+        <li><strong>Legal and safety needs:</strong> Information may be disclosed if reasonably necessary to comply with law, respond to valid legal process, protect someone from serious harm, investigate abuse, or protect LightSync’s rights and security.</li>
+      </ul>
+      <p>LightSync does not give audience members a directory of hosts or saved shows. The live show name and settings are visible to people who have the room code. Information handled by Google, Render, Neon, or your network provider is also subject to their own terms and privacy practices.</p>
+
+      <h2>5. Retention and deletion</h2>
+      <ul>
+        <li><strong>Saved shows:</strong> Kept in the account library until you delete each show or request account-data deletion. You can delete saved shows from the host library.</li>
+        <li><strong>Account profile:</strong> The Google account identifier, email, and name remain in the account database until the account data is deleted. There is no self-service account-deletion feature yet; email the privacy contact to request deletion.</li>
+        <li><strong>Sign-in sessions:</strong> The browser cookie can last up to ten years. Signing out deletes the current session record. The current system does not automatically expire unused database session records, so request account deletion if you want the profile and associated sessions removed.</li>
+        <li><strong>Active rooms:</strong> Removed at room end, after up to 12 hours, or on server restart.</li>
+        <li><strong>Rate-limit counters:</strong> Kept in process memory to enforce short rolling limits; they are not written to the account database or application request logs and are cleared when the process restarts.</li>
+        <li><strong>Browser data:</strong> Remains in local or session storage until it expires with the browser session or is cleared by you.</li>
+        <li><strong>Provider records:</strong> Render, Neon, and Google may retain operational, backup, or account records under their own retention schedules.</li>
+      </ul>
+      <p>When you request account deletion, LightSync will verify the request and remove account and saved-show records from its active database, subject to legal obligations and provider-controlled backup or operational retention. Signing out alone does not delete saved show data.</p>
+
+      <h2>6. Your choices and privacy rights</h2>
+      <p>You can choose not to sign in, join a show without creating an account, opt out of light output, leave a show, clear browser storage, delete individual saved shows, or sign out. If you sign out, the current sign-in session is revoked, but your account profile and saved shows remain.</p>
+      <p>Depending on where you live, you may have rights to request access to, correction of, deletion of, or a copy of personal information; object to or restrict certain processing; or withdraw consent where processing depends on consent. To make a request, email <a href="mailto:hector.rxdev@gmail.com">hector.rxdev@gmail.com</a> from the account email and describe the request. We may ask for information needed to verify that you control the account. You may also have the right to complain to your local data-protection or consumer-protection authority.</p>
+
+      <h2>7. Children and minors</h2>
+      <p>LightSync is not intentionally directed to children under 13, and host accounts are intended for adults. Do not create a host account for a child under 13. Audience participation does not require an account or a name, but an adult organizer should supervise minors and obtain any permission required by law. If you believe a child under 13 has provided account information to LightSync, contact <a href="mailto:hector.rxdev@gmail.com">hector.rxdev@gmail.com</a> so the information can be reviewed and addressed.</p>
+
+      <h2>8. Security</h2>
+      <p>LightSync uses measures such as HTTPS in production, secure and HttpOnly account cookies, hashed server-side session tokens, room-scoped controller authorization, request validation, rate limits, and restrictive browser security headers. No internet service or storage system can be guaranteed completely secure. Protect your Google account, do not share controller credentials, and contact us if you suspect unauthorized account access.</p>
+
+      <h2>9. International processing</h2>
+      <p>Google, Render, Neon, and the networks that deliver the service may process information in the United States or other countries where they or their infrastructure operate. Privacy protections in those locations may differ from the protections where you live. Each provider is responsible for describing its own transfer mechanisms and safeguards in its privacy materials.</p>
+
+      <h2>10. Changes to this policy</h2>
+      <p>LightSync may update this Policy when its features, providers, or legal requirements change. The “Effective” date above identifies the current version. If a change materially affects how account information is used, LightSync will provide a notice in the service where practicable before applying the new use.</p>
+
+      <h2>11. Contact</h2>
+      <p>For privacy questions, access or deletion requests, or concerns about a child’s information, contact Hector, the LightSync project owner, at <a href="mailto:hector.rxdev@gmail.com">hector.rxdev@gmail.com</a>.</p>
+    </article>
+    <nav class="legal-bottom-links" aria-label="Other legal page"><a href="/terms">Read the Terms of Use <span aria-hidden="true">→</span></a><a href="/">Return to LightSync</a></nav>
+  </main>
+</body>
+</html>

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-host-auth-1">
+  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-legal-pages-1">
 </head>
 <body class="operator-page">
   <header class="topbar operator-topbar">
@@ -38,8 +38,8 @@
         <div class="setup-entry-heading"><div class="eyebrow">HOST ACCESS</div><h2 id="setup-title">Start a show</h2></div>
         <div id="host-auth" class="host-auth">
           <p id="auth-message">Sign in or create an account with Google to host a show.</p>
-          <a id="google-sign-in" class="button button-primary button-large" href="/auth/google"><span class="google-mark" aria-hidden="true">G</span><span>Continue with Google</span><span class="google-arrow" aria-hidden="true">→</span></a>
-          <small>New to LightSync? Your host account is ready when you sign in.</small>
+          <a id="google-sign-in" class="button button-primary button-large" href="/auth/google"><img class="google-mark" src="/assets/google-g-logo.png" alt="" aria-hidden="true"><span>Continue with Google</span><span class="google-arrow" aria-hidden="true">→</span></a>
+          <small>Google shares your verified email and profile name to create your host account. By continuing, you agree to the <a href="/terms">Terms of Use</a> and acknowledge the <a href="/privacy">Privacy Policy</a>.</small>
         </div>
         <section id="saved-show-library" class="saved-show-library hidden" aria-labelledby="saved-show-title">
           <div class="saved-show-library-heading"><div><div class="eyebrow">YOUR LIGHTSYNC LIBRARY</div><h3 id="saved-show-title">Saved shows</h3></div><span id="saved-show-count" class="saved-show-count">0 SHOWS</span></div>
@@ -49,6 +49,7 @@
         </section>
         <form id="create-form" class="host-create-form hidden"><label for="show-name">Show name</label><div class="create-row"><input id="show-name" maxlength="48" required placeholder="Friday night lights"><button type="submit" class="button button-primary button-large">Start a new show <span aria-hidden="true">→</span></button></div></form>
         <div class="setup-entry-footer"><span class="status-square" aria-hidden="true"></span><span>Guests join with lights off until they choose an output.</span></div>
+        <nav class="legal-links host-legal-links" aria-label="Legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Use</a></nav>
       </div>
     </section>
     <section id="console" class="hidden">
