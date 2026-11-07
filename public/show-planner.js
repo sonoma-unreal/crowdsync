@@ -206,12 +206,32 @@ export function detectBeatTimes(analysis, { mode = 'adaptive', sensitivity = 55,
     const nearest = Math.round((beat.at - phaseMs) / intervalMs), distance = Math.abs(beat.at - (phaseMs + nearest * intervalMs));
     return nearest >= 0 && distance <= Math.min(140, intervalMs * .22);
   });
-  const enoughTransients = peaks.length >= Math.max(2, Math.min(6, Math.ceil(expected * .18)));
-  const supportedGrid = aligned.length >= Math.max(2, Math.min(5, Math.ceil(expected * .2)));
-  if (peaks.length && (mode === 'onsets' || (mode === 'adaptive' && enoughTransients && (supportedGrid || peaks.length >= Math.min(8, expected * .35))))) return { times: peaks.map((beat) => beat.at), strengths: peaks.map((beat) => beat.strength), mode: 'detected' };
-  if (mode === 'onsets') return { times: [], strengths: [], mode: 'detected' };
+  if (mode === 'onsets') return { times: peaks.map((beat) => beat.at), strengths: peaks.map((beat) => beat.strength), mode: 'detected' };
   const times = [], strengths = [];
-  for (let at = phaseMs; at < durationMs && times.length < MAX_BEAT_EVENTS; at += intervalMs) { const time = Math.max(0, Math.round(at)), frame = Math.max(0, Math.min(usableOnset.length - 1, Math.round(time / frameMs))); times.push(time); strengths.push(Math.max(0, Number(usableOnset[frame]) || 0)); }
+  if (mode === 'adaptive' && aligned.length) {
+    // Use the estimated beat grid as the backbone so quieter beats are not
+    // omitted. Snap a nearby real attack onto each grid beat when available.
+    const tolerance = Math.min(140, intervalMs * .22); let peakIndex = 0, snappedCount = 0;
+    for (let gridAt = phaseMs; gridAt < durationMs && times.length < MAX_BEAT_EVENTS; gridAt += intervalMs) {
+      while (peakIndex < peaks.length && peaks[peakIndex].at < gridAt - tolerance) peakIndex++;
+      let best = null;
+      for (let i = peakIndex; i < peaks.length && peaks[i].at <= gridAt + tolerance; i++) {
+        if (!best || peaks[i].strength > best.strength) best = peaks[i];
+      }
+      const at = Math.max(0, Math.min(durationMs - 1, Math.round(best?.at ?? gridAt)));
+      if (times.length && at - times[times.length - 1] < safeGap) continue;
+      const frame = Math.max(0, Math.min(usableOnset.length - 1, Math.round(at / frameMs)));
+      times.push(at); strengths.push(best?.strength ?? Math.max(0, usableOnset[frame] || 0));
+      if (best) snappedCount++;
+    }
+    return { times, strengths, mode: snappedCount >= Math.ceil(times.length * .6) ? 'detected' : 'tempo-grid' };
+  }
+  for (let at = phaseMs; at < durationMs && times.length < MAX_BEAT_EVENTS; at += intervalMs) {
+    const time = Math.max(0, Math.round(at));
+    if (times.length && time - times[times.length - 1] < safeGap) continue;
+    const frame = Math.max(0, Math.min(usableOnset.length - 1, Math.round(time / frameMs)));
+    times.push(time); strengths.push(Math.max(0, Number(usableOnset[frame]) || 0));
+  }
   return { times, strengths, mode: 'tempo-grid' };
 }
 
