@@ -211,6 +211,8 @@ test('audience auto-sync probes relay only through their room controller', async
   const roomA=await create(base,'Controller clock A'),roomB=await create(base,'Controller clock B');
   const operatorA=await connect(base,'operator',roomA.room.id,roomA.token),operatorAActive=await connect(base,'operator',roomA.room.id,roomA.token),operatorB=await connect(base,'operator',roomB.room.id,roomB.token),audience=await connect(base,'audience',roomA.room.id);
   await Promise.all([nextMessage(operatorA,m=>m.type==='welcome'),nextMessage(operatorAActive,m=>m.type==='welcome'),nextMessage(operatorB,m=>m.type==='welcome'),nextMessage(audience,m=>m.type==='welcome')]);
+  audience.send(JSON.stringify({type:'sync-request'}));
+  await nextMessage(operatorAActive,m=>m.type==='sync-request');
   const probeId=crypto.randomUUID(),clientSent=performance.now();
   audience.send(JSON.stringify({type:'controller-ping',probeId,clientSent}));
   await nextMessage(operatorAActive,m=>m.type==='controller-ping'&&m.probeId===probeId);

@@ -1,7 +1,7 @@
 const gate = document.querySelector('#immersive-gate');
 const enterButton = document.querySelector('#immersive-enter');
 const supportNote = document.querySelector('#immersive-support-note');
-const fullscreenExit = document.querySelector('#immersive-exit');
+const fullscreenToggle = document.querySelector('#immersive-toggle');
 const themeButtons = [document.querySelector('#audience-theme-dark'), document.querySelector('#audience-theme-light')];
 const THEME_KEY = 'crowdsync.audience.theme.v1';
 let controlsTimer = 0;
@@ -32,8 +32,10 @@ function isFullscreen() {
 function notifyImmersion() {
   window.crowdImmersionActive = isFullscreen();
   document.body.classList.toggle('immersive-active', window.crowdImmersionActive);
-  const userCanExit = !!document.fullscreenElement || document.body.classList.contains('immersive-pseudo');
-  fullscreenExit?.classList.toggle('hidden', !userCanExit);
+  const showState = document.querySelector('#show-state')?.textContent?.trim().toLowerCase() || '';
+  const joined = showState.startsWith('synced') || showState === 'show is live' || showState === 'show paused' || showState === 'blackout active';
+  fullscreenToggle?.classList.toggle('hidden', !joined);
+  if (fullscreenToggle) { const active = !!document.fullscreenElement || document.body.classList.contains('immersive-pseudo'); fullscreenToggle.textContent = active ? 'Exit full screen' : 'Full screen'; fullscreenToggle.setAttribute('aria-label', active ? 'Exit full screen' : 'Enter full screen'); }
   if (window.crowdImmersionActive) {
     gate.classList.add('hidden');
     revealControls();
@@ -87,10 +89,14 @@ async function enterImmersive() {
 }
 
 enterButton.addEventListener('click', () => { void enterImmersive(); });
-fullscreenExit?.addEventListener('click', async () => {
+async function exitImmersive() {
   if (document.body.classList.contains('immersive-pseudo')) document.body.classList.remove('immersive-pseudo');
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch {} }
   notifyImmersion();
+}
+fullscreenToggle?.addEventListener('click', () => {
+  if (document.fullscreenElement || document.body.classList.contains('immersive-pseudo')) void exitImmersive();
+  else void enterImmersive();
 });
 document.addEventListener('fullscreenchange', () => { notifyImmersion(); updateGate(); });
 document.addEventListener('pointerdown', (event) => {
@@ -100,5 +106,5 @@ document.addEventListener('pointerdown', (event) => {
 document.addEventListener('keydown', () => { if (window.crowdImmersionActive) revealControls(); });
 document.addEventListener('touchstart', () => { if (window.crowdImmersionActive) revealControls(); }, { passive: true });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { window.crowdEffectsVisible = false; window.dispatchEvent(new CustomEvent('crowdsync:immersion', { detail: { active: window.crowdImmersionActive, effectsVisible: false } })); } else if (window.crowdImmersionActive) revealControls(); });
-new MutationObserver(updateGate).observe(document.querySelector('#show-state'), { childList: true, characterData: true, subtree: true });
+new MutationObserver(() => { updateGate(); notifyImmersion(); }).observe(document.querySelector('#show-state'), { childList: true, characterData: true, subtree: true });
 updateGate();

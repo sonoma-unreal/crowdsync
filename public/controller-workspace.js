@@ -72,8 +72,8 @@ function saveWorkspace() {
     free: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window.is-free-window')].map((node) => [node.dataset.windowId, {
       x: Number(node.dataset.freeX) || 0, y: Number(node.dataset.freeY) || 0, width: Number(node.dataset.freeWidth) || node.getBoundingClientRect().width,
     }])),
-    sizes: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window[data-window-columns], :scope > .workspace-window[data-window-height]')].map((node) => [node.dataset.windowId, {
-      columns: Number(node.dataset.windowColumns) || null, height: Number(node.dataset.windowHeight) || null,
+    sizes: Object.fromEntries([...root.querySelectorAll(':scope > .workspace-window[data-window-columns], :scope > .workspace-window[data-window-width], :scope > .workspace-window[data-window-height]')].map((node) => [node.dataset.windowId, {
+      columns: Number(node.dataset.windowColumns) || null, width: Number(node.dataset.windowWidth) || null, height: Number(node.dataset.windowHeight) || null,
     }])),
   }]));
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(workspaceState)); } catch {}
@@ -91,8 +91,8 @@ function applyWorkspaceSnapshot(snapshot) {
     for (const card of cards) {
       card.classList.remove('is-hidden-window', 'is-minimized-window', 'is-resized-window');
       updateMinimizeControl(card, false);
-      card.removeAttribute('data-window-columns'); card.removeAttribute('data-window-height');
-      card.style.removeProperty('--window-columns'); card.style.removeProperty('--window-height');
+      card.removeAttribute('data-window-columns'); card.removeAttribute('data-window-width'); card.removeAttribute('data-window-height');
+      card.style.removeProperty('--window-columns'); card.style.removeProperty('--window-width'); card.style.removeProperty('--window-height');
       clearFreePosition(card);
     }
     for (const id of saved.hidden || []) byId.get(id)?.classList.add('is-hidden-window');
@@ -100,7 +100,8 @@ function applyWorkspaceSnapshot(snapshot) {
     for (const [id, size] of Object.entries(saved.sizes || {})) {
       const card = byId.get(id); if (!card) continue;
       if (Number.isInteger(size.columns) && size.columns >= 2 && size.columns <= 12) setWindowColumns(card, size.columns);
-      if (Number.isInteger(size.height) && size.height >= 180 && size.height <= 1000) setWindowHeight(card, size.height);
+      if (Number.isInteger(size.width) && size.width >= 280 && size.width <= 2400) setWindowWidth(card, size.width);
+      if (Number.isInteger(size.height) && size.height >= 192 && size.height <= 1024) setWindowHeight(card, size.height);
     }
     for (const [id, position] of Object.entries(saved.free || {})) {
       const card = byId.get(id); if (!card || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)) continue;
@@ -134,6 +135,9 @@ function addWindowBar(card) {
   resizeHandle.className = 'workspace-resize-handle'; resizeHandle.type = 'button';
   resizeHandle.setAttribute('aria-label', `Resize ${label}`); resizeHandle.title = 'Drag to resize';
   resizeHandle.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 15 15 5M9 15l6-6M13 15l2-2"/></svg>';
+  const sizeReadout = document.createElement('output');
+  sizeReadout.className = 'workspace-size-readout'; sizeReadout.setAttribute('aria-live', 'polite'); sizeReadout.setAttribute('aria-hidden', 'true');
+  card.append(sizeReadout);
   resizeHandle.addEventListener('pointerdown', startResize); card.append(resizeHandle);
   card.classList.add('workspace-window');
   card.dataset.windowLabel = label;
@@ -191,7 +195,8 @@ function setupRoots() {
       const card = root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`);
       if (!card) continue;
       if (Number.isInteger(size.columns) && size.columns >= 2 && size.columns <= 12) setWindowColumns(card, size.columns);
-      if (Number.isInteger(size.height) && size.height >= 180 && size.height <= 1000) setWindowHeight(card, size.height);
+      if (Number.isInteger(size.width) && size.width >= 280 && size.width <= 2400) setWindowWidth(card, size.width);
+      if (Number.isInteger(size.height) && size.height >= 192 && size.height <= 1024) setWindowHeight(card, size.height);
     }
     for (const [id, position] of Object.entries(saved?.free || {})) {
       const card = root.querySelector(`:scope > [data-window-id="${CSS.escape(id)}"]`);
@@ -207,7 +212,7 @@ function updateDragField(event) {
   event.currentTarget.style.setProperty('--pointer-y', `${event.clientY - bounds.top}px`);
 }
 function defaultColumns(card) {
-  if (card.classList.contains('cue-builder-card') || card.classList.contains('community-effects-card')) return 12;
+  if (card.classList.contains('cue-builder-card') || card.classList.contains('community-effects-card') || card.classList.contains('effect-graph-card')) return 12;
   if (card.classList.contains('audience-setup-card') || card.classList.contains('live-controls-card')) return 8;
   if (card.classList.contains('join-card') || card.classList.contains('activity-card')) return 4;
   if (card.classList.contains('crowd-preview-card')) return 7;
@@ -217,10 +222,31 @@ function defaultColumns(card) {
 function setWindowColumns(card, columns) {
   card.dataset.windowColumns = String(columns);
   card.style.setProperty('--window-columns', String(columns));
+  clearWindowWidth(card);
 }
+function setWindowWidth(card, width) {
+  card.removeAttribute('data-window-columns'); card.style.removeProperty('--window-columns');
+  card.dataset.windowWidth = String(Math.round(width));
+  card.style.setProperty('--window-width', `${Math.round(width)}px`);
+}
+function clearWindowWidth(card) { delete card.dataset.windowWidth; card.style.removeProperty('--window-width'); }
 function setWindowHeight(card, height) {
   card.dataset.windowHeight = String(height);
   card.style.setProperty('--window-height', `${height}px`);
+}
+function snapToGrid(value, step, min, max) {
+  const minSnap = Math.ceil(min / step) * step;
+  const maxSnap = Math.floor(max / step) * step;
+  return Math.max(minSnap, Math.min(maxSnap, Math.round(value / step) * step));
+}
+function updateResizeReadout(state = resizeState) {
+  if (!state?.card || !state.readout) return;
+  const rect = state.card.getBoundingClientRect();
+  const width = Math.round(rect.width), height = Math.round(rect.height);
+  const columns = Number(state.card.dataset.windowColumns) || state.gridColumns;
+  const free = state.card.classList.contains('is-free-window');
+  const pixelWidth = state.responsive || free || !!state.card.dataset.windowWidth;
+  state.readout.textContent = `${free ? 'FREE' : pixelWidth ? 'GRID' : `${columns} COL`} · ${width} × ${height} px`;
 }
 function setFreePosition(card, x, y, width) {
   card.classList.add('is-free-window');
@@ -257,7 +283,7 @@ function startDrag(event) {
   if (event.button !== 0 || !event.isPrimary || event.target.closest('button') || resizeState || draggedWindow) return;
   const card = event.currentTarget.closest('.workspace-window');
   if (!card) return;
-  event.preventDefault(); movingWindow = card;
+  event.preventDefault(); movingWindow = card; card.classList.add('is-window-held');
   const rect = card.getBoundingClientRect();
   pointerOrigin = { x: event.clientX, y: event.clientY, id: event.pointerId, grabX: event.clientX - rect.left, grabY: event.clientY - rect.top, rect };
   event.currentTarget.setPointerCapture(event.pointerId);
@@ -272,24 +298,39 @@ function startResize(event) {
   event.preventDefault(); event.stopPropagation();
   const rect = card.getBoundingClientRect(), columns = Number(card.dataset.windowColumns) || defaultColumns(card);
   const gap = Number.parseFloat(getComputedStyle(root).columnGap) || 0;
-  resizeState = { card, root, id: event.pointerId, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, columns, columnWidth: (root.clientWidth - gap * 11) / 12 + gap };
-  card.classList.add('is-resizing-window'); event.currentTarget.setPointerCapture(event.pointerId);
+  const gridColumns = getComputedStyle(root).gridTemplateColumns.split(' ').length || 12;
+  resizeState = { card, root, readout: card.querySelector('.workspace-size-readout'), id: event.pointerId, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, columns, gridColumns, responsive: innerWidth <= 860, columnWidth: (root.clientWidth - gap * (gridColumns - 1)) / gridColumns + gap };
+  card.classList.add('is-resizing-window', 'is-window-held'); resizeState.readout?.setAttribute('aria-hidden', 'false'); updateResizeReadout(); event.currentTarget.setPointerCapture(event.pointerId);
   document.addEventListener('pointermove', resizeMove);
   document.addEventListener('pointerup', endResize, { once: true });
   document.addEventListener('pointercancel', endResize, { once: true });
 }
 function resizeMove(event) {
   if (!resizeState || event.pointerId !== resizeState.id) return;
-  const { card, root, x, y, width, height, columns, columnWidth } = resizeState;
-  if (card.classList.contains('is-free-window')) setFreePosition(card, Number(card.dataset.freeX) || 0, Number(card.dataset.freeY) || 0, Math.max(280, Math.min(root.clientWidth - (Number(card.dataset.freeX) || 0), width + event.clientX - x)));
-  else if (innerWidth > 860) setWindowColumns(card, Math.max(2, Math.min(12, columns + Math.round((event.clientX - x) / Math.max(1, columnWidth)))));
-  setWindowHeight(card, Math.max(190, Math.min(1000, Math.round(height + event.clientY - y))));
-  root.classList.add('is-resizing');
+  const { card, root, x, y, width, height, columns, gridColumns, responsive, columnWidth } = resizeState;
+  const free = card.classList.contains('is-free-window');
+  if (free) {
+    const left = Number(card.dataset.freeX) || 0, maxWidth = Math.max(280, root.clientWidth - left);
+    setFreePosition(card, left, Number(card.dataset.freeY) || 0, snapToGrid(width + event.clientX - x, 32, 280, maxWidth));
+  } else if (responsive) {
+    setWindowWidth(card, snapToGrid(width + event.clientX - x, 32, 280, Math.max(280, root.clientWidth)));
+  } else {
+    const nextColumns = Math.max(2, Math.min(gridColumns, columns + Math.round((event.clientX - x) / Math.max(1, columnWidth))));
+    setWindowColumns(card, nextColumns);
+  }
+  const maxHeight = Math.max(192, Math.min(1024, root.clientHeight - (Number(card.dataset.freeY) || 0)));
+  setWindowHeight(card, snapToGrid(height + event.clientY - y, 32, 192, maxHeight));
+  root.classList.add('is-resizing'); updateResizeReadout();
 }
 function endResize() {
   document.removeEventListener('pointermove', resizeMove);
   document.removeEventListener('pointerup', endResize); document.removeEventListener('pointercancel', endResize);
-  if (resizeState) { resizeState.card.classList.remove('is-resizing-window'); resizeState.root.classList.remove('is-resizing'); saveWorkspace(); }
+  if (resizeState) {
+    const { card, root, readout } = resizeState;
+    card.classList.remove('is-resizing-window', 'is-window-held'); card.classList.add('is-window-releasing');
+    root.classList.remove('is-resizing'); readout.setAttribute('aria-hidden', 'true');
+    setTimeout(() => card.classList.remove('is-window-releasing'), 380); saveWorkspace();
+  }
   resizeState = null;
 }
 function targetAtPoint(root, x, y) {
@@ -353,11 +394,16 @@ function endDrag(event) {
       clearFreePosition(draggedWindow);
       if (dragSlot?.parentElement) dragSlot.replaceWith(draggedWindow);
     }
-    const droppedWindow = draggedWindow; droppedWindow.classList.add('is-dropping-window'); setTimeout(() => droppedWindow.classList.remove('is-dropping-window'), 280);
+    const droppedWindow = draggedWindow; droppedWindow.classList.remove('is-window-held'); droppedWindow.classList.add('is-dropping-window', 'is-window-releasing'); setTimeout(() => droppedWindow.classList.remove('is-dropping-window', 'is-window-releasing'), 380);
     root?.classList.remove('is-dragging');
     root?.classList.remove('is-free-dragging');
     if (root) animateReflow(root, before);
     saveWorkspace();
+  }
+  if (movingWindow) {
+    const releasedWindow = movingWindow;
+    releasedWindow.classList.remove('is-window-held'); releasedWindow.classList.add('is-window-releasing');
+    setTimeout(() => releasedWindow.classList.remove('is-window-releasing'), 380);
   }
   draggedWindow = null; movingWindow = null; pointerOrigin = null; dragSlot = null;
 }

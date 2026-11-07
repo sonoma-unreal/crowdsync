@@ -578,6 +578,13 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!ws.role) return ws.close(1008, 'Join first');
+    if (ws.role === 'audience' && message.type === 'sync-request') {
+      if (Object.keys(message).length !== 1 || ws.confirmed || !ws.room.waiting.has(ws)) return ws.close(1008, 'Invalid sync request');
+      const operator = [...ws.room.operators].reverse().find((candidate) => candidate.readyState === WebSocket.OPEN && candidate.claims?.exp > now);
+      if (operator) send(operator, { type: 'sync-request' });
+      else send(ws, { type: 'error', message: 'Waiting for the controller to connect before syncing.' });
+      return;
+    }
     if (Object.keys(message).some((key) => !['type', 'testId', 'command', 'commandId', 'effect', 'rate', 'value', 'enabled', 'acknowledgedRisk', 'screenColor', 'accentColor', 'text', 'plan', 'groups', 'groupIndex'].includes(key))) return ws.close(1008, 'Unexpected message field');
     if (ws.role === 'audience' && message.type === 'confirm-sync') {
       if (Object.keys(message).some((key) => !['type', 'testId', 'groupIndex'].includes(key)) || !Number.isSafeInteger(message.testId) || (message.groupIndex !== undefined && message.groupIndex !== null && (!Number.isSafeInteger(message.groupIndex) || message.groupIndex < 0 || message.groupIndex >= ws.room.groups.length)) || (ws.room.groups.length === 0 && message.groupIndex !== undefined && message.groupIndex !== null)) return ws.close(1008, 'Invalid sync confirmation');

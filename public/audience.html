@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Geist+Mono:wght@100..900&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/styles.css?v=lightsync-legal-pages-1">
+  <link rel="stylesheet" href="/assets/styles.css?v=audience-sync-flow-ms-1">
 </head>
 <body class="audience-page">
   <main id="output" class="audience-output" aria-hidden="true"><div class="torch-audience-orb"></div><div id="marquee" class="audience-message" aria-live="polite" hidden></div></main>
@@ -30,10 +30,18 @@
       <div class="safety-notice"><span class="safety-icon">!</span><div><strong>Photosensitivity notice</strong><p>This show may use rapidly flashing phone torches or screens. It may affect people with photosensitive epilepsy or other light sensitivities. You can opt out at any time; choose whether to participate based on your needs.</p></div></div>
       <label class="consent-row"><input id="consent" type="checkbox"><span>I have read the notice, agree to the <a href="/terms">Terms of Use</a>, and want to continue.</span></label>
       <p class="audience-legal-consent">See our <a href="/privacy">Privacy Policy</a> for how LightSync handles information.</p>
-      <button id="join" class="button button-primary button-large" disabled>Continue to sync test</button>
+      <div class="join-choice-actions"><button id="decline-consent" class="button button-quiet" type="button">I do not accept</button><button id="join" class="button button-primary button-large" disabled>Continue</button></div>
       <p class="torch-note">Torch permission is used only to control the flashlight. If torch control is unavailable, a synchronized screen-light fallback is used.</p>
       <nav class="legal-links audience-legal-links" aria-label="Legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Use</a></nav>
     </div>
+  </section>
+
+  <section id="declined-gate" class="join-gate hidden" aria-live="polite">
+    <div class="join-dialog"><div class="eyebrow">NOT JOINING</div><h1>You are not an active participant</h1><p class="muted">You are not an active participant as of now, you can change your decision to join in the show by pressing the button below.</p><button id="change-decision" class="button button-primary button-large" type="button">Change my decision</button></div>
+  </section>
+
+  <section id="output-choice-gate" class="join-gate hidden" aria-labelledby="output-choice-title">
+    <div class="join-dialog"><div class="eyebrow">CHOOSE YOUR LIGHT</div><h1 id="output-choice-title">How would you like to join?</h1><p class="muted">Choose the screen or your phone flashlight. Your light stays off until sync begins.</p><div class="output-choice-actions"><button id="join-screen" class="button button-secondary button-large" type="button">Use screen</button><button id="join-torch" class="button button-primary button-large" type="button">Use flashlight</button></div><button id="back-to-consent" class="text-button" type="button">Back to terms and safety notice</button></div>
   </section>
 
   <section id="sync-gate" class="join-gate hidden">
@@ -44,7 +52,7 @@
       <p id="offset-label" class="offset-label">Light offset: 0 ms</p>
       <section id="audience-groups" class="audience-groups hidden" aria-labelledby="audience-group-title"><strong id="audience-group-title">Choose your section</strong><p class="small-copy">Your choice only controls which parts of the light score your phone follows.</p><div id="audience-group-options" class="audience-group-options"></div></section>
       <div class="sync-network-row"><button id="auto-sync" class="button button-secondary" type="button" disabled>Auto sync</button><span id="sync-network-status" role="status" aria-live="polite">Checking room clock…</span></div>
-      <p class="sync-network-help">Auto sync pings the controller and aligns this phone to the room clock. Use the timing buttons below for device-specific light delay.</p>
+      <p class="sync-network-help">The controller sends the sync beat. Auto sync aligns this phone to its clock; use the millisecond controls for a small device-specific correction if needed.</p>
       <div class="offset-control" role="group" aria-label="Adjust light timing">
         <span>Adjust light timing</span>
         <div class="offset-buttons">
@@ -59,7 +67,7 @@
         <button id="confirm-sync" class="button button-primary" disabled>Confirm sync &amp; join</button>
       </div>
       <p id="sync-readiness" class="small-copy sync-readiness" role="status" aria-live="polite">Connect to the room to continue.</p>
-      <p class="torch-note">If torch access is unavailable or denied, LightSync switches to your screen. Listen for the repeating beep and line up your light pulse with the target.</p>
+      <p class="torch-note">If torch access is unavailable or denied, LightSync switches to your screen. The controller is the only sync-beep source; your light timing is measured automatically.</p>
       <button id="cancel-join" class="text-button">Leave</button>
     </div>
   </section>
@@ -70,6 +78,7 @@
       <p class="muted">Choose how your phone takes part. These choices affect only this device.</p>
       <div class="settings-option"><div><strong class="icon-label"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>Light output</strong><p id="light-mode-description" class="small-copy">Choose the screen or phone torch for this device.</p><p id="screen-mode-lock" class="small-copy hidden">The controller has set every phone to screen output.</p></div><div id="output-mode-switch" class="output-mode-switch" role="group" aria-label="Choose light output"><button id="mode-screen" type="button" aria-pressed="false">Screen</button><button id="mode-torch" type="button" aria-pressed="true">Torch flash</button></div></div>
       <div class="settings-option"><div><strong class="icon-label">Appearance</strong><p class="small-copy">Choose a matte light or dark interface for this phone.</p></div><div class="output-mode-switch" role="group" aria-label="Choose interface theme"><button id="audience-theme-dark" type="button" aria-pressed="true">Dark</button><button id="audience-theme-light" type="button" aria-pressed="false">Light</button></div></div>
+      <div class="settings-option"><div><strong class="icon-label">Light timing</strong><p class="small-copy">Auto sync stays aligned to the controller. Fine tune this device in milliseconds if needed.</p><span id="settings-offset-label" class="offset-label">Light offset: 0 ms</span></div><div class="offset-buttons" role="group" aria-label="Fine tune light timing"><button id="settings-offset-earlier" class="button button-secondary" type="button">−10 ms</button><button id="settings-offset-reset" class="button button-quiet" type="button">Reset</button><button id="settings-offset-later" class="button button-secondary" type="button">+10 ms</button><button id="settings-auto-sync" class="button button-secondary" type="button">Check sync</button></div></div>
     </section>
   </main>
 
@@ -78,8 +87,10 @@
     <div><strong>The show is live</strong><p>Keep this page open. LightSync will keep your display awake when your browser allows it. Use Settings to choose Screen or Torch flash; tap Turn off any time.</p></div>
     <div class="live-guide-actions"><button id="guide-settings" class="button button-secondary" type="button">Settings</button><button id="dismiss-guide" class="button button-quiet" type="button">Got it</button></div>
   </aside>
-  <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button><button id="immersive-exit" class="button button-quiet hidden" type="button">Exit full screen</button></div></footer>
+  <footer class="audience-controls"><div><span id="show-state" class="audience-state">Waiting to join</span><span id="effect-name" class="muted">Light is off</span></div><div class="audience-buttons"><button id="torch" class="button button-primary" disabled>Enable light</button><button id="local-stop" class="button button-danger" disabled>Turn off</button><button id="leave" class="button button-quiet" hidden>Leave</button></div></footer>
+  <div id="sync-confirmation" class="sync-confirmation" role="status" aria-live="polite" hidden>You have been synced with the operator</div>
+  <button id="immersive-toggle" class="button button-primary immersive-toggle hidden" type="button" aria-label="Enter full screen">Full screen</button>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/audience.js?v=lightsync-brand-refresh-1"></script><script type="module" src="/assets/audience-immersive.js?v=lightsync-brand-refresh-1"></script>
+  <script type="module" src="/assets/audience.js?v=audience-sync-flow-ms-1"></script><script type="module" src="/assets/audience-immersive.js?v=audience-sync-flow-ms-1"></script>
 </body>
 </html>
