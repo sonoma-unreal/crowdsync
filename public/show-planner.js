@@ -1,4 +1,4 @@
-import { BEAT_MAP_QUANTUM_MS, MAX_BEAT_EVENTS, MAX_BEAT_MAP_LENGTH, maxRateForEffect, normalizeTorchSettings } from './safety.js';
+import { BEAT_MAP_QUANTUM_MS, MAX_BEAT_EVENTS, MAX_BEAT_MAP_LENGTH } from './safety.js';
 
 const BEAT_MAP_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 export function encodeBeatMap(times) {
@@ -18,7 +18,9 @@ export function encodeBeatMap(times) {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const MOOD_STYLES = ['beacon', 'ripple', 'wave', 'pulse', 'chase', 'crescendo', 'sparkle', 'march'];
+// Kept to effects with a single, bounded event per beat. Selection is made
+// from measured musical features below; there is no per-beat random choice.
+const MOOD_STYLES = ['pulse', 'ripple', 'wave', 'chase', 'crescendo', 'sparkle', 'march', 'beacon'];
 
 // Analyze audio locally in 50 ms hops. A longer, Hann-windowed FFT gives the
 // detector better low-frequency resolution; spectral flux helps distinguish
@@ -240,34 +242,127 @@ function blendColor(first, second, amount) {
   return `#${a.map((value, index) => Math.round(value + (b[index] - value) * amount).toString(16).padStart(2, '0')).join('')}`;
 }
 
+function quantile(values, fraction) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))] || 0;
+}
+
+function meanRange(values, from, to) {
+  if (!values?.length) return 0;
+  const start = clamp(from, 0, values.length - 1), end = clamp(to, start + 1, values.length);
+  let sum = 0;
+  for (let i = start; i < end; i++) sum += Math.max(0, Number(values[i]) || 0);
+  return sum / Math.max(1, end - start);
+}
+
+function maxRange(values, from, to) {
+  if (!values?.length) return 0;
+  const start = clamp(from, 0, values.length - 1), end = clamp(to, start + 1, values.length);
+  let maximum = 0;
+  for (let i = start; i < end; i++) maximum = Math.max(maximum, Number(values[i]) || 0);
+  return maximum;
+}
+
+function onsetPeaks(values, from, to, threshold, frameMs) {
+  if (!values?.length) return [];
+  const start = clamp(from, 1, values.length - 2), end = clamp(to, start + 1, values.length - 1);
+  const peaks = [];
+  for (let i = start; i < end; i++) {
+    const strength = Number(values[i]) || 0;
+    if (strength < threshold || strength <= values[i - 1] || strength < values[i + 1]) continue;
+    // Keep closely spaced rhythmic strokes distinct while still merging
+    // adjacent FFT ripples from the same transient.
+    const last = peaks.at(-1), separation = Math.max(1, Math.round(60 / frameMs));
+    if (last && i - last.frame < separation) {
+      if (strength > last.strength) peaks[peaks.length - 1] = { frame: i, strength };
+    } else peaks.push({ frame: i, strength });
+  }
+  return peaks;
+}
+
+function chooseBeatMood(features) {
+  const { attack, energy, bass, mid, treble, lift, tempo, density, rapidRoll } = features;
+  // A fast, repeated onset roll is a timbral texture: keep it Sparkle even if
+  // its peaks are loud enough to score as Pulse or its band mix is bass-heavy.
+  if (rapidRoll) return 'sparkle';
+  // Scores overlap intentionally: hard attacks favor Pulse; low-heavy paired
+  // beats favor March; bright airy material favors Sparkle; sustained rises
+  // favor Crescendo. The winning score is deterministic for the same audio.
+  const scores = {
+    pulse: .08 + attack * .78 + energy * .12,
+    ripple: .13 + mid * .37 + density * .24 + (1 - attack) * .13,
+    wave: .12 + bass * .32 + mid * .18 + density * .2 + energy * .12,
+    chase: .08 + treble * .31 + tempo * .24 + attack * .19,
+    crescendo: .08 + lift * .56 + energy * .29 + (1 - attack) * .08,
+    sparkle: .1 + treble * .4 + (1 - energy) * .28 + (1 - density) * .12,
+    march: .08 + bass * .3 + attack * .12 + density * .2 + tempo * .1,
+    beacon: .1 + (1 - energy) * .2 + (1 - attack) * .16 + (1 - density) * .12,
+  };
+  return MOOD_STYLES.reduce((best, effect) => scores[effect] > scores[best] ? effect : best, MOOD_STYLES[0]);
+}
+
 export function buildMusicPlan(analysis, { bpm, screenColor, accentColor, enhancedProtection = true, detection = {} } = {}) {
   if (!analysis || !Number.isFinite(analysis.durationMs) || !Array.isArray(analysis.envelope)) throw new Error('Analyze a track before building its light score');
   const safeBpm = clamp(Math.round(Number(bpm) || analysis.bpm || 120), 60, 180), beatResult = analysis.beatMode === 'beat-this' && Array.isArray(analysis.beatTimes)
     ? { times: analysis.beatTimes, strengths: analysis.beatStrengths || analysis.beatTimes.map(() => 1), mode: 'beat-this' }
     : detectBeatTimes({ ...analysis, bpm: safeBpm }, detection);
   if (!beatResult.times.length) throw new Error('No beat transients found. Lower sensitivity or choose Adaptive / Tempo grid.');
-  const beatMap = encodeBeatMap(beatResult.times), energy = analysis.envelope.map((value) => Math.max(0, Number(value) || 0)), sorted = [...energy].sort((a, b) => a - b);
-  const low = sorted[Math.floor(sorted.length * .12)] || 0, high = Math.max(low + 1e-6, sorted[Math.floor(sorted.length * .92)] || 0);
-  const strengths = beatResult.strengths, peak = Math.max(.000001, ...strengths), table = [], tableKeys = new Map(), codes = [];
+  const beatMap = encodeBeatMap(beatResult.times), energy = analysis.envelope.map((value) => Math.max(0, Number(value) || 0)), frameMs = analysis.frameMs || 50;
+  const energyFloor = quantile(energy, .12), energyCeiling = Math.max(energyFloor + 1e-6, quantile(energy, .92));
+  const onsetValues = analysis.onsets || [], onsetCeiling = Math.max(1e-6, quantile(onsetValues, .95));
+  const onsetThreshold = Math.max(onsetCeiling * .28, quantile(onsetValues, .7));
+  const bands = analysis.bandEnergy || {}, bandTotals = (bands.low || []).map((_, frame) => (bands.low?.[frame] || 0) + (bands.mid?.[frame] || 0) + (bands.high?.[frame] || 0));
+  const tempoFeature = clamp((safeBpm - 65) / 105, 0, 1), table = [], tableKeys = new Map(), codes = [];
+  const colorA = /^#[\da-f]{6}$/i.test(screenColor || '') ? screenColor.toLowerCase() : '#25c3e8';
+  const colorB = /^#[\da-f]{6}$/i.test(accentColor || '') ? accentColor.toLowerCase() : '#a855f7';
   for (let i = 0; i < beatResult.times.length; i++) {
-    const at = beatResult.times[i], frame = clamp(Math.floor(at / (analysis.frameMs || 50)), 0, energy.length - 1), span = Math.max(2, Math.round(60_000 / safeBpm / (analysis.frameMs || 50)));
-    const from = Math.max(0, frame - Math.floor(span * .2)), to = Math.min(energy.length, frame + span), local = energy.slice(from, to);
-    const level = local.reduce((sum, value) => sum + value, 0) / Math.max(1, local.length), intensity = clamp((level - low) / (high - low), 0, .999), transient = clamp((strengths[i] || 0) / peak, 0, 1);
-    const bass = analysis.bandEnergy?.low?.[frame] || 0, treble = analysis.bandEnergy?.high?.[frame] || 0, tone = bass + treble ? treble / (bass + treble) : .5;
-    const mood = clamp(intensity * .66 + transient * .24 + tone * .1, 0, .999), effect = MOOD_STYLES[Math.floor(mood * MOOD_STYLES.length)];
-    const colorMix = clamp(intensity * .62 + transient * .28 + tone * .1, 0, 1), style = { effect, screenColor: blendColor(screenColor.toLowerCase(), accentColor.toLowerCase(), colorMix) };
+    const at = beatResult.times[i], frame = clamp(Math.floor(at / frameMs), 0, energy.length - 1), span = Math.max(2, Math.round(60_000 / safeBpm / frameMs));
+    const from = Math.max(0, frame - Math.floor(span * .22)), to = Math.min(energy.length, frame + Math.max(2, Math.ceil(span * .8)));
+    const level = meanRange(energy, from, to), intensity = clamp((level - energyFloor) / (energyCeiling - energyFloor), 0, 1);
+    // Read the actual onset envelope even for imported Beat This timestamps;
+    // imported beat strengths alone contain no per-beat dynamic information.
+    const onset = maxRange(onsetValues, Math.max(0, frame - 1), frame + 2);
+    const attack = clamp(onset / onsetCeiling, 0, 1);
+    let bass = 0, mid = 0, treble = 0;
+    for (let j = from; j < to; j++) {
+      const total = bandTotals[j] || 0;
+      if (!total) continue;
+      bass += (bands.low?.[j] || 0) / total;
+      mid += (bands.mid?.[j] || 0) / total;
+      treble += (bands.high?.[j] || 0) / total;
+    }
+    const bandFrames = Math.max(1, to - from); bass /= bandFrames; mid /= bandFrames; treble /= bandFrames;
+    const previousFrom = Math.max(0, frame - span), previousLevel = meanRange(energy, previousFrom, Math.max(previousFrom + 1, frame));
+    const lift = clamp(.5 + (level - previousLevel) / Math.max(energyCeiling - energyFloor, 1e-6), 0, 1);
+    const before = beatResult.times[i - 1], after = beatResult.times[i + 1];
+    const localInterval = (before !== undefined && after !== undefined) ? (after - before) / 2 : (after !== undefined ? after - at : before !== undefined ? at - before : 60_000 / safeBpm);
+    const density = clamp(1 - (localInterval - 250) / 1000, 0, 1);
+    const rollPeaks = onsetPeaks(onsetValues, frame - Math.floor(span * .15), frame + Math.ceil(span * .85), onsetThreshold, frameMs);
+    const rollGaps = rollPeaks.slice(1).map((peak, index) => (peak.frame - rollPeaks[index].frame) * frameMs).sort((a, b) => a - b);
+    const rollMedianGap = rollGaps.length ? rollGaps[Math.floor(rollGaps.length / 2)] : Infinity;
+    // A fast repeated-hit run (for example, a rattling comb-like roll) is a
+    // rhythmic texture regardless of whether it is bassy, midrange, or bright.
+    const rapidRoll = rollPeaks.length >= 4 && rollMedianGap >= 60 && rollMedianGap <= 240;
+    const effect = chooseBeatMood({ attack, energy: intensity, bass, mid, treble, lift, tempo: tempoFeature, density, rapidRoll });
+    // Four color positions span the selected template's primary-to-accent
+    // range. Quantizing also keeps the shared style table bounded and prevents
+    // later beats from inheriting an unrelated earlier effect at its limit.
+    const colorMix = clamp(intensity * .38 + attack * .18 + treble * .24 + lift * .2, 0, 1);
+    const colorStep = Math.round(colorMix * 3), quantizedMix = colorStep / 3;
+    const style = { effect, screenColor: blendColor(colorA, colorB, quantizedMix) };
     const key = `${style.effect}|${style.screenColor}`;
     if (!tableKeys.has(key)) {
+      // Eight moods x four palette positions is exactly the protocol limit.
       if (table.length < 32) { tableKeys.set(key, table.length); table.push(style); }
-      else tableKeys.set(key, Math.max(0, Math.min(table.length - 1, Math.round(colorMix * (table.length - 1)))));
+      else tableKeys.set(key, table.findIndex((entry) => entry.effect === style.effect && entry.screenColor === style.screenColor));
     }
     codes.push(ALPHABET[tableKeys.get(key)]);
   }
-  const fallbackRate = normalizeTorchSettings('pulse', Math.min(1, maxRateForEffect('pulse', enhancedProtection)), enhancedProtection).rate;
   return {
     durationMs: analysis.durationMs,
-    cues: [{ at: 0, effect: 'pulse', rate: fallbackRate, screenColor: screenColor.toLowerCase(), accentColor: accentColor.toLowerCase(), group: null }],
-    beatMap, beatStyles: codes.join(''), beatStyleTable: table.length ? table : [{ effect: 'pulse', screenColor: screenColor.toLowerCase() }],
+    cues: [{ at: 0, effect: 'solid', rate: 0, screenColor: colorA, accentColor: colorB, group: null }],
+    beatMap, beatStyles: codes.join(''), beatStyleTable: table.length ? table : [{ effect: 'pulse', screenColor: colorA }],
     beatCount: beatResult.times.length, beatMode: beatResult.mode, bpm: safeBpm,
   };
 }
