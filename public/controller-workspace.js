@@ -119,6 +119,14 @@ function labelFor(card) {
     || card.querySelector('h2,h3')?.textContent?.trim() || 'Workspace window';
 }
 function addWindowBar(card) {
+  const existing = [...card.querySelectorAll(':scope > .workspace-windowbar')];
+  if (existing.length) {
+    const keep = existing.find((bar) => bar.querySelector('.workspace-window-title')?.textContent.trim()) || existing[0];
+    for (const bar of existing) if (bar !== keep) bar.remove();
+    const title = keep.querySelector('.workspace-window-title');
+    if (title) title.textContent = labelFor(card);
+    return;
+  }
   const label = labelFor(card);
   const bar = document.createElement('div');
   bar.className = 'workspace-windowbar';
@@ -146,6 +154,20 @@ function setupRoots() {
       ? [...root.querySelectorAll('.show-editor-grid > .card'), ...root.querySelectorAll(':scope > .card')]
       : [...root.querySelectorAll(':scope > .card')];
     for (const card of children) {
+      // A stale or repeated workspace bootstrap can leave duplicate chrome on
+      // an existing card. Normalize it before the ready guard so reloads repair
+      // old DOM instead of preserving stacked title bars indefinitely.
+      const bars = [...card.querySelectorAll(':scope > .workspace-windowbar')];
+      if (bars.length) {
+        const keep = bars.find((bar) => bar.querySelector('.workspace-window-title')?.textContent.trim()) || bars[0];
+        for (const bar of bars) if (bar !== keep) bar.remove();
+        const title = keep.querySelector('.workspace-window-title');
+        if (title) title.textContent = labelFor(card);
+      }
+      for (const selector of ['.workspace-resize-handle', '.workspace-size-readout']) {
+        const duplicates = [...card.querySelectorAll(`:scope > ${selector}`)];
+        for (const element of duplicates.slice(1)) element.remove();
+      }
       if (card.dataset.workspaceReady) continue;
       const id = card.classList.contains('audience-setup-card') ? 'sync-check'
         : card.classList.contains('join-card') ? 'join-code'
