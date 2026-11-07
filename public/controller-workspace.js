@@ -119,14 +119,10 @@ function labelFor(card) {
     || card.querySelector('h2,h3')?.textContent?.trim() || 'Workspace window';
 }
 function addWindowBar(card) {
-  const existing = [...card.querySelectorAll(':scope > .workspace-windowbar')];
-  if (existing.length) {
-    const keep = existing.find((bar) => bar.querySelector('.workspace-window-title')?.textContent.trim()) || existing[0];
-    for (const bar of existing) if (bar !== keep) bar.remove();
-    const title = keep.querySelector('.workspace-window-title');
-    if (title) title.textContent = labelFor(card);
-    return;
-  }
+  // Rebuild chrome on cards that have not been initialized by this version.
+  // This repairs markup left behind by older workspace bootstraps and keeps
+  // their stale titlebar handlers from stacking with the current controls.
+  card.querySelectorAll(':scope > .workspace-windowbar, :scope > .workspace-resize-handle, :scope > .workspace-size-readout').forEach((element) => element.remove());
   const label = labelFor(card);
   const bar = document.createElement('div');
   bar.className = 'workspace-windowbar';
