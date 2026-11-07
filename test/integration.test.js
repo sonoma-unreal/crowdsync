@@ -47,7 +47,7 @@ test('saved shows are isolated by account and reopen with the saved safe configu
   const port=await freePort(),base=`http://127.0.0.1:${port}`,cookie=accountCookie();
   const child=spawn(process.execPath,['src/server.js'],{env:{...process.env,HOST:'127.0.0.1',PORT:String(port),PUBLIC_BASE_URL:base,DATABASE_URL:'',NODE_ENV:'test'},stdio:'ignore'});
   t.after(()=>child.kill());await waitForServer(base,child);
-  const created=await create(base,'Friday lights');
+  const created=await create(base,'Friday lights');assert.equal(created.room.torchEnabled,true,'guest effects are enabled by default for a new show');assert.equal(created.room.effect,'solid');assert.equal(created.room.rate,0);
   const headers={Cookie:cookie,Origin:base,'Content-Type':'application/json'};
   const mutationHeaders={Cookie:cookie,Origin:base};
   const libraryResponse=await fetch(`${base}/api/account/shows`,{headers});assert.equal(libraryResponse.status,200);
@@ -60,7 +60,7 @@ test('saved shows are isolated by account and reopen with the saved safe configu
   assert.equal(changed.status,200);
   const ended=await fetch(`${base}/api/operator/close`,{method:'POST',headers:{Authorization:`Bearer ${created.token}`}});assert.equal(ended.status,200);
   const reopenedResponse=await fetch(`${base}/api/account/shows/${saved.id}/continue`,{method:'POST',headers:mutationHeaders});assert.equal(reopenedResponse.status,200);
-  const reopened=await reopenedResponse.json();assert.notEqual(reopened.room.id,created.room.id);assert.equal(reopened.room.screenColor,'#6f54e8');assert.equal(reopened.room.accentColor,'#28d7bf');assert.equal(reopened.room.torchEnabled,false);assert.equal(reopened.room.screenMode,false);
+  const reopened=await reopenedResponse.json();assert.notEqual(reopened.room.id,created.room.id);assert.equal(reopened.room.screenColor,'#6f54e8');assert.equal(reopened.room.accentColor,'#28d7bf');assert.equal(reopened.room.torchEnabled,true);assert.equal(reopened.room.screenMode,false);assert.equal(reopened.room.effect,'solid');assert.equal(reopened.room.rate,0);
   const removed=await fetch(`${base}/api/account/shows/${saved.id}`,{method:'DELETE',headers:mutationHeaders});assert.equal(removed.status,200);
   assert.equal((await (await fetch(`${base}/api/account/shows`,{headers})).json()).shows.length,0);
   assert.equal((await fetch(`${base}/api/rooms/${reopened.room.id}`)).status,200,'deleting a saved setup does not close its active room');
@@ -162,8 +162,8 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   operator.send(JSON.stringify({type:'command',command:'effect',effect:'solid',commandId:20}));
   const solidState=await nextMessage(operator,m=>m.state?.effect==='solid');assert.equal(solidState.state.rate,0);
   await new Promise((resolve)=>setTimeout(resolve,60));
-  operator.send(JSON.stringify({type:'command',command:'effect',effect:'pulse',rate:0,commandId:21}));
-  const pulseState=await nextMessage(operator,m=>m.state?.effect==='pulse');assert.equal(pulseState.state.rate,0.25);
+  operator.send(JSON.stringify({type:'command',command:'effect',effect:'pulse',rate:1.2,commandId:21}));
+  const pulseState=await nextMessage(operator,m=>m.state?.effect==='pulse');assert.equal(pulseState.state.rate,1.2,'changing away from Solid must accept a valid normalized effect rate');
   operator.send(JSON.stringify({type:'command',command:'sync-start',commandId:22}));
   const testStarted=await nextMessage(audience,m=>m.state?.syncTest?.active);assert.equal(testStarted.state.syncTest.testId,1);
   await nextMessage(operator,m=>m.type==='ack'&&m.command==='sync-start');
@@ -177,11 +177,12 @@ test('HTTP and WebSocket room lifecycle, timing, reconnect, and authorization', 
   operator.send(JSON.stringify({type:'command',command:'start',commandId:24}));
   const started=await nextMessage(audience,m=>m.state?.status==='running');assert.ok(started.state.startedAt>0);
   await new Promise((resolve)=>setTimeout(resolve,60));
-  const livePlan={durationMs:15_000,cues:[{at:0,effect:'pulse',rate:1,screenColor:'#ff315a',accentColor:'#ffd21f',group:null}]};
+  const livePlan={durationMs:3_000,anchorMs:4_000,cues:[{at:0,effect:'pulse',rate:1,screenColor:'#ff315a',accentColor:'#ffd21f',group:null}]};
   operator.send(JSON.stringify({type:'command',command:'show-plan',plan:livePlan,commandId:25}));
   const livePlanState=await nextMessage(audience,m=>m.state?.showPlan?.cues?.[0]?.screenColor==='#ff315a');
   assert.equal(livePlanState.state.status,'running');assert.equal(livePlanState.state.startedAt,started.state.startedAt);assert.equal(livePlanState.state.epoch,started.state.epoch);
   await nextMessage(operator,m=>m.type==='ack'&&m.command==='show-plan');
+  await new Promise(resolve=>setTimeout(resolve,3_900));const anchoredLiveState=await(await fetch(`${base}/api/operator/state`,{headers:{Authorization:`Bearer ${roomA.token}`} })).json();assert.equal(anchoredLiveState.state.status,'running','an offset timeline must receive its full duration after the anchor');
   await new Promise(resolve=>setTimeout(resolve,60));
   operator.send(JSON.stringify({type:'command',command:'marquee',text:'GO TEAM!',commandId:26}));
   await nextMessage(operator,m=>m.type==='ack'&&m.command==='marquee');

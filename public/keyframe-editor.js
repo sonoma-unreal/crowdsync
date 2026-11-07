@@ -4,7 +4,7 @@ const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 const effects = Object.entries(TORCH_EFFECTS).filter(([, item]) => item.pulses > 0);
 const hueColor = (h, s, v = 1) => { const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]; return `#${[r, g, b].map(value => Math.round((value + m) * 255).toString(16).padStart(2, '0')).join('')}`; };
 function colorHueSaturation(hex) { const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min; let h = 0; if (d) h = max === r ? 60 * (((g - b) / d) % 6) : max === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4); return { h: (h + 360) % 360, s: max ? d / max : 0, v: max }; }
-let activePlan = null, activeUpdate = null, selectedIndex = 0, activePlaybackIndex = -1, activePlaybackTimeMs = null, scrubTimeMs = null, followPlayback = true, redraw = null, inspectorTab = 'properties', drag = null;
+let activePlan = null, activeAnalysis = null, lastTimelineAnalysis = null, activeUpdate = null, selectedIndex = 0, activePlaybackIndex = -1, activePlaybackTimeMs = null, scrubTimeMs = null, followPlayback = true, timelineZoom = 1, timelineStartMs = 0, lastTimelineDuration = 0, redraw = null, inspectorTab = 'properties', drag = null;
 function styleAt(plan, index, table, indices) { return table[indices[index] ?? 0] || { effect: 'pulse', screenColor: plan?.cues?.[0]?.screenColor || '#f4f1e8' }; }
 function encodeBeatMap(times) {
   let prior = 0, encoded = '';
@@ -17,31 +17,52 @@ function encodeBeatMap(times) {
   return encoded;
 }
 function drawTimeline(canvas, times, table, indices, playbackIndex = activePlaybackIndex) {
-  if (!canvas || !times?.length) return;
-  const rect = canvas.getBoundingClientRect(), width = Math.max(320, rect.width), height = 212;
-  canvas.width = Math.round(width * Math.min(2, devicePixelRatio || 1)); canvas.height = height * Math.min(2, devicePixelRatio || 1); canvas.style.height = `${height}px`;
-  const ctx = canvas.getContext('2d'), dpr = Math.min(2, devicePixelRatio || 1); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const light = document.body.dataset.theme === 'light', bg = light ? '#f5f4ef' : '#0c0c0b', line = light ? '#d5d3cc' : '#292927', muted = light ? '#696860' : '#99978f', text = light ? '#252521' : '#ecebe5';
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
-  const pageStart = 0, pageEnd = times.length, visible = times, startMs = 0, endMs = Math.max(1, activePlan.durationMs), span = endMs, left = 52, right = width - 18, plotWidth = Math.max(1, right - left);
-  ctx.font = '9px ui-monospace, monospace'; ctx.fillStyle = muted; ctx.textAlign = 'left'; ctx.fillText('LIGHT EFFECT', 8, 91); ctx.fillText('COLOUR', 8, 159);
-  ctx.fillStyle = light ? '#ebeae4' : '#171716'; ctx.fillRect(left, 63, plotWidth, 48); ctx.fillRect(left, 128, plotWidth, 48);
+  if (!canvas || !times?.length || !activePlan) return;
+  const rect = canvas.getBoundingClientRect(), width = Math.max(1, rect.width), height = 236, dpr = Math.min(2, devicePixelRatio || 1), duration = Math.max(1, activePlan.durationMs);
+  canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const light = document.body.dataset.theme === 'light', bg = light ? '#f5f4ef' : '#0c0c0b', line = light ? '#d5d3cc' : '#292927', muted = light ? '#696860' : '#99978f', text = light ? '#252521' : '#ecebe5', panel = light ? '#ebeae4' : '#171716';
+  if (duration !== lastTimelineDuration || (activeAnalysis && activeAnalysis !== lastTimelineAnalysis)) { timelineZoom = 1; timelineStartMs = 0; lastTimelineDuration = duration; lastTimelineAnalysis = activeAnalysis; }
+  const span = Math.min(duration, duration / timelineZoom), maxStart = Math.max(0, duration - span), playheadTime = scrubTimeMs ?? activePlaybackTimeMs;
+  if (followPlayback && Number.isFinite(playheadTime)) timelineStartMs = Math.max(0, Math.min(maxStart, playheadTime - span * .16));
+  timelineStartMs = Math.max(0, Math.min(maxStart, timelineStartMs));
+  const startMs = timelineStartMs, endMs = startMs + span, left = 58, right = width - 12, plotWidth = Math.max(1, right - left), xAt = ms => left + ((ms - startMs) / span) * plotWidth;
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height); ctx.font = '8px ui-monospace, monospace'; ctx.textAlign = 'left';
+  const lanes = [{ label: 'WAVEFORM', top: 34, bottom: 80 }, { label: 'BEATS', top: 88, bottom: 105 }, { label: 'LIGHT FX', top: 113, bottom: 162 }, { label: 'COLOUR', top: 171, bottom: 220 }];
+  ctx.fillStyle = muted; ctx.fillText('TIME', 8, 23);
+  for (const lane of lanes) { ctx.fillStyle = muted; ctx.fillText(lane.label, 8, (lane.top + lane.bottom) / 2 + 3); ctx.fillStyle = panel; ctx.fillRect(left, lane.top, plotWidth, lane.bottom - lane.top); }
   ctx.strokeStyle = line; ctx.lineWidth = 1;
-  for (let tick = 0; tick <= 4; tick++) { const x = left + plotWidth * tick / 4; ctx.beginPath(); ctx.moveTo(x + .5, 35); ctx.lineTo(x + .5, 181); ctx.stroke(); const ms = startMs + span * tick / 4; ctx.fillStyle = muted; ctx.fillText(`${(ms / 1000).toFixed(1)}s`, Math.min(right - 26, x + 3), 24); }
-  ctx.fillStyle = muted; ctx.fillText('TIME', 8, 24); ctx.fillText('BEAT', 8, 54);
-  const points = visible.map((time, offset) => { const index = pageStart + offset, x = left + ((time - startMs) / span) * plotWidth, style = styleAt(activePlan, index, table, indices); return { index, time, x, style }; });
-  for (let i = 0; i < points.length; i++) {
-    const point = points[i], nextX = points[i + 1]?.x ?? right, blockW = Math.max(1, Math.min(14, nextX - point.x - 1)), selected = point.index === selectedIndex, playing = point.index === playbackIndex;
-    ctx.fillStyle = selected ? (light ? '#d5d2c9' : '#353430') : (light ? '#e3e2dc' : '#222220'); ctx.fillRect(point.x + 1, 68, blockW, 38);
-    ctx.fillStyle = point.style.screenColor; ctx.fillRect(point.x + 1, 133, blockW, 38);
-    if (playing) { ctx.shadowColor = point.style.screenColor; ctx.shadowBlur = 12; ctx.fillStyle = point.style.screenColor; ctx.fillRect(point.x + 1, 133, blockW, 38); ctx.shadowBlur = 0; }
-    ctx.strokeStyle = selected ? text : line; ctx.lineWidth = selected ? 1.5 : 1; ctx.strokeRect(point.x + .5, 68.5, Math.max(1, blockW - 1), 37); ctx.strokeRect(point.x + .5, 133.5, Math.max(1, blockW - 1), 37);
-    if (blockW >= 24) { ctx.fillStyle = text; ctx.font = '8px ui-monospace, monospace'; ctx.fillText((TORCH_EFFECTS[point.style.effect]?.label || point.style.effect).slice(0, 4).toUpperCase(), point.x + 4, 91); }
+  for (let tick = 0; tick <= 4; tick++) { const ms = startMs + span * tick / 4, x = xAt(ms); ctx.beginPath(); ctx.moveTo(x + .5, 28); ctx.lineTo(x + .5, 221); ctx.stroke(); ctx.fillStyle = muted; ctx.fillText(`${(ms / 1000).toFixed(1)}s`, Math.min(right - 28, x + 3), 22); }
 
+  const envelope = activeAnalysis?.envelope, frameMs = activeAnalysis?.frameMs || 50;
+  if (Array.isArray(envelope) && envelope.length) {
+    let peak = 0; for (const value of envelope) if (value > peak) peak = value; peak = Math.max(peak, .000001);
+    ctx.beginPath(); ctx.moveTo(left, 79);
+    for (let x = 0; x < plotWidth; x++) { const ms0 = startMs + x / plotWidth * span, ms1 = startMs + (x + 1) / plotWidth * span, first = Math.max(0, Math.floor(ms0 / frameMs)), last = Math.min(envelope.length - 1, Math.max(first, Math.ceil(ms1 / frameMs))); let value = 0; for (let index = first; index <= last; index++) value = Math.max(value, envelope[index] || 0); const y = 77 - Math.min(38, value / peak * 36); ctx.lineTo(left + x, y); }
+    ctx.lineTo(right, 79); ctx.closePath(); ctx.fillStyle = light ? '#77766f' : '#aaa89f'; ctx.globalAlpha = .72; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = light ? '#5a5953' : '#d7d4cb'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 0; x < plotWidth; x++) { const ms = startMs + x / plotWidth * span, index = Math.min(envelope.length - 1, Math.max(0, Math.floor(ms / frameMs))), y = 77 - Math.min(38, (envelope[index] || 0) / peak * 36); if (x === 0) ctx.moveTo(left + x, y); else ctx.lineTo(left + x, y); } ctx.stroke();
+  } else { ctx.fillStyle = muted; ctx.fillText('LOAD AN AUDIO FILE TO SEE ITS WAVEFORM', left + 8, 61); }
+
+  const detectedBeats = activeAnalysis?.beatTimes || [];
+  ctx.strokeStyle = light ? '#77766f' : '#c8c5bc'; ctx.fillStyle = light ? '#77766f' : '#c8c5bc';
+  for (let i = 0; i < detectedBeats.length; i++) { const at = detectedBeats[i]; if (at < startMs || at > endMs) continue; const x = xAt(at); ctx.globalAlpha = .2; ctx.beginPath(); ctx.moveTo(x + .5, 34); ctx.lineTo(x + .5, 80); ctx.stroke(); ctx.globalAlpha = i === 0 || activeAnalysis?.beatThisDownbeats?.includes(at) ? .95 : .62; ctx.fillRect(x - 1, 90, 2, 13); }
+  ctx.globalAlpha = 1;
+
+  let first = 0; while (first < times.length - 1 && times[first + 1] < startMs) first++;
+  for (let index = first; index < times.length && times[index] <= endMs; index++) {
+    const time = times[index], next = times[index + 1] ?? duration, x = Math.max(left, xAt(time)), endX = Math.min(right, xAt(next)), blockW = Math.max(2, endX - x), style = styleAt(activePlan, index, table, indices), selected = index === selectedIndex, playing = index === playbackIndex;
+    ctx.fillStyle = selected ? (light ? '#d5d2c9' : '#353430') : (light ? '#e3e2dc' : '#222220'); ctx.fillRect(x, 117, blockW, 40);
+    ctx.fillStyle = style.screenColor; ctx.fillRect(x, 175, blockW, 40);
+    if (playing) { ctx.shadowColor = style.screenColor; ctx.shadowBlur = 12; ctx.fillStyle = style.screenColor; ctx.fillRect(x, 175, blockW, 40); ctx.shadowBlur = 0; }
+    ctx.strokeStyle = selected ? text : line; ctx.lineWidth = selected ? 1.5 : 1; ctx.strokeRect(x + .5, 117.5, Math.max(1, blockW - 1), 39); ctx.strokeRect(x + .5, 175.5, Math.max(1, blockW - 1), 39);
+    if (blockW >= 42) { ctx.fillStyle = text; ctx.font = '8px ui-monospace, monospace'; ctx.fillText((TORCH_EFFECTS[style.effect]?.label || style.effect).toUpperCase(), x + 5, 140); }
+    if (playing) { ctx.strokeStyle = '#fff'; ctx.globalAlpha = .75; ctx.beginPath(); ctx.moveTo(x + .5, 30); ctx.lineTo(x + .5, 220); ctx.stroke(); ctx.globalAlpha = 1; }
   }
-  const playheadTime = scrubTimeMs ?? activePlaybackTimeMs; if (playheadTime !== null && playheadTime >= startMs && playheadTime <= endMs) { const x = left + (playheadTime - startMs) / span * plotWidth; ctx.strokeStyle = '#f2efe6'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + .5, 30); ctx.lineTo(x + .5, 183); ctx.stroke(); ctx.fillStyle = '#f2efe6'; ctx.beginPath(); ctx.moveTo(x - 4, 30); ctx.lineTo(x + 4, 30); ctx.lineTo(x, 37); ctx.fill(); }
-  canvas.dataset.left = String(left); canvas.dataset.right = String(right); canvas.dataset.start = String(startMs); canvas.dataset.span = String(span); canvas.dataset.pageStart = String(pageStart); canvas.dataset.pageEnd = String(pageEnd);
+  if (playheadTime !== null && playheadTime >= startMs && playheadTime <= endMs) { const x = xAt(playheadTime); ctx.strokeStyle = '#f2efe6'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + .5, 28); ctx.lineTo(x + .5, 221); ctx.stroke(); ctx.fillStyle = '#f2efe6'; ctx.beginPath(); ctx.moveTo(x - 4, 28); ctx.lineTo(x + 4, 28); ctx.lineTo(x, 34); ctx.fill(); }
+  canvas.dataset.left = String(left); canvas.dataset.right = String(right); canvas.dataset.start = String(startMs); canvas.dataset.span = String(span); canvas.dataset.pageStart = '0'; canvas.dataset.pageEnd = String(times.length);
   const total = document.querySelector('#keyframe-total'); if (total) total.textContent = `${times.length} BEATS · ${(activePlan.durationMs / 1000).toFixed(1)} SEC`;
+  const zoom = document.querySelector('#timeline-zoom-value'); if (zoom) zoom.textContent = timelineZoom <= 1 ? 'FIT' : `${timelineZoom.toFixed(1)}×`;
   const follow = document.querySelector('#beat-follow'); if (follow) { follow.setAttribute('aria-pressed', String(followPlayback)); follow.classList.toggle('selected', followPlayback); }
 }
 function setTab(shell, tab) { inspectorTab = tab; shell.querySelectorAll('[data-inspector-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.inspectorTab === tab))); shell.querySelectorAll('[data-inspector-panel]').forEach(panel => panel.classList.toggle('hidden', panel.dataset.inspectorPanel !== tab)); }
@@ -58,14 +79,14 @@ function renderBeatList(panel, times, table, indices) {
     const select = document.createElement('button'); select.type = 'button'; select.className = 'keyframe-time'; select.textContent = `${String(index + 1).padStart(3, '0')} · ${(times[index] / 1000).toFixed(2)}s`; select.setAttribute('aria-label', `Select beat ${index + 1} at ${(times[index] / 1000).toFixed(2)} seconds`);
     const effect = document.createElement('select'); effect.className = 'keyframe-effect'; effect.setAttribute('aria-label', `Beat ${index + 1} light effect`); for (const [id, item] of effects) effect.append(new Option(item.label, id)); effect.value = styleAt(activePlan, index, table, indices).effect;
     const color = document.createElement('input'); color.type = 'color'; color.className = 'keyframe-color'; color.value = styleAt(activePlan, index, table, indices).screenColor; color.setAttribute('aria-label', `Beat ${index + 1} color`);
-    select.onclick = () => { selectedIndex = index; followPlayback = false; renderKeyframeEditor(activePlan, activeUpdate, false); };
+    select.onclick = () => { selectedIndex = index; followPlayback = false; renderKeyframeEditor(activePlan, activeUpdate, false, activeAnalysis); };
     effect.onchange = () => updateStyles(index, 'effect', effect.value, table, indices); color.onchange = () => updateStyles(index, 'screenColor', color.value, table, indices); row.append(select, effect, color); fragment.append(row);
   }
   panel.replaceChildren(fragment);
 }
-function renderKeyframeEditor(plan, onUpdate, resetSelection = true) {
+function renderKeyframeEditor(plan, onUpdate, resetSelection = true, analysis = null) {
   const shell = document.querySelector('#keyframe-editor'); if (!shell) return;
-  activePlan = plan; activeUpdate = onUpdate;
+  activePlan = plan; activeAnalysis = analysis; activeUpdate = onUpdate;
   const times = plan?.beatMap ? decodeBeatMap(plan.beatMap, plan.durationMs) : null; shell.classList.toggle('hidden', !times); if (!times) return;
   const initial = { effect: plan.cues[0].effect, screenColor: plan.cues[0].screenColor }, table = plan.beatStyleTable?.length ? plan.beatStyleTable : [initial];
   let indices = plan.beatStyles ? decodeBeatStyles(plan.beatStyles, times.length, table) : null; if (!indices) indices = Array(times.length).fill(0);
@@ -81,12 +102,14 @@ function renderKeyframeEditor(plan, onUpdate, resetSelection = true) {
   shell.querySelectorAll('[data-inspector-tab]').forEach(button => { button.onclick = () => setTab(shell, button.dataset.inspectorTab); });
   const updateSelection = index => { selectedIndex = index; followPlayback = false; const style = styleAt(plan, index, table, indices), color = colorHueSaturation(style.screenColor), r = Math.max(1, wheel.clientWidth / 2 - 11); selected.textContent = `BEAT ${String(index + 1).padStart(2, '0')} · ${(times[index] / 1000).toFixed(2)} s`; timeLabel.textContent = `At ${(times[index] / 1000).toFixed(2)} s`; effectControl.value = style.effect; colorControl.value = style.screenColor; lightboxColor.value = style.screenColor; saturation.value = String(Math.round(color.s * 100)); brightness.value = String(Math.round(color.v * 100)); satOut.value = `${saturation.value}%`; brightOut.value = `${brightness.value}%`; marker.style.left = `calc(50% + ${Math.cos(color.h * Math.PI / 180) * r}px)`; marker.style.top = `calc(50% - ${Math.sin(color.h * Math.PI / 180) * r}px)`; setTab(shell, 'properties'); drawTimeline(canvas, times, table, indices); renderBeatList(list, times, table, indices); };
   effectControl.onchange = () => updateStyles(selectedIndex, 'effect', effectControl.value, table, indices); colorControl.onchange = () => updateStyles(selectedIndex, 'screenColor', colorControl.value, table, indices);
-  canvas.onpointerdown = event => { if (event.button !== 0) return; const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top, left = Number(canvas.dataset.left), right = Number(canvas.dataset.right), start = Number(canvas.dataset.start), span = Number(canvas.dataset.span), pageStart = Number(canvas.dataset.pageStart), pageEnd = Number(canvas.dataset.pageEnd), timeAtX = Math.max(0, Math.min(plan.durationMs, start + ((x - left) / Math.max(1, right - left)) * span));
-    if (y <= 40) { drag = { kind: 'playhead', pointerId: event.pointerId }; scrubTimeMs = timeAtX; activePlaybackTimeMs = timeAtX; window.dispatchEvent(new CustomEvent('lightsync:timeline-seek', { detail: { timeMs: timeAtX, commit: false } })); drawTimeline(canvas, times, table, indices); }
-    else { const candidates = times.slice(pageStart, pageEnd).map((time, i) => ({ index: pageStart + i, x: left + ((time - start) / span) * (right - left) })).sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x)); if (!candidates.length) return; updateSelection(candidates[0].index); drag = { kind: 'clip', index: candidates[0].index, pointerId: event.pointerId, moved: false }; }
+  canvas.onpointerdown = event => { if (event.button !== 0 && event.button !== 1) return; const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top, left = Number(canvas.dataset.left), right = Number(canvas.dataset.right), start = Number(canvas.dataset.start), span = Number(canvas.dataset.span), pageStart = Number(canvas.dataset.pageStart), pageEnd = Number(canvas.dataset.pageEnd), timeAtX = Math.max(0, Math.min(plan.durationMs, start + ((x - left) / Math.max(1, right - left)) * span));
+    if (event.button === 1 || event.shiftKey) { followPlayback = false; drag = { kind: 'pan', pointerId: event.pointerId, startX: x, startMs: start, span }; }
+    else if (y <= 105) { followPlayback = false; drag = { kind: 'playhead', pointerId: event.pointerId }; scrubTimeMs = timeAtX; activePlaybackTimeMs = timeAtX; window.dispatchEvent(new CustomEvent('lightsync:timeline-seek', { detail: { timeMs: timeAtX, commit: false } })); drawTimeline(canvas, times, table, indices); }
+    else { const candidates = times.slice(pageStart, pageEnd).map((time, i) => ({ index: pageStart + i, time, x: left + ((time - start) / span) * (right - left) })).filter(point => point.time >= start && point.time <= start + span).sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x)); if (!candidates.length) return; updateSelection(candidates[0].index); drag = { kind: 'clip', index: candidates[0].index, pointerId: event.pointerId, moved: false }; }
     canvas.setPointerCapture(event.pointerId);
   };
   canvas.onpointermove = event => { if (!drag || drag.pointerId !== event.pointerId || !canvas.hasPointerCapture(event.pointerId)) return; const rect = canvas.getBoundingClientRect(), x = event.clientX - rect.left, left = Number(canvas.dataset.left), right = Number(canvas.dataset.right), start = Number(canvas.dataset.start), span = Number(canvas.dataset.span);
+    if (drag.kind === 'pan') { timelineStartMs = Math.max(0, Math.min(plan.durationMs - span, drag.startMs - ((x - drag.startX) / Math.max(1, right - left)) * drag.span)); drawTimeline(canvas, times, table, indices); return; }
     if (drag.kind === 'playhead') { scrubTimeMs = Math.max(0, Math.min(plan.durationMs, start + ((x - left) / Math.max(1, right - left)) * span)); activePlaybackTimeMs = scrubTimeMs; window.dispatchEvent(new CustomEvent('lightsync:timeline-seek', { detail: { timeMs: scrubTimeMs, commit: false } })); drawTimeline(canvas, times, table, indices); return; }
     const index = drag.index, min = index ? times[index - 1] + 260 : 0, max = index < times.length - 1 ? times[index + 1] - 260 : plan.durationMs - 20, raw = start + ((x - left) / Math.max(1, right - left)) * span, next = Math.max(min, Math.min(max, Math.round(raw / 20) * 20)); if (next === times[index]) return; times[index] = next; drag.moved = true; drawTimeline(canvas, times, table, indices);
   };
@@ -104,13 +127,18 @@ function renderKeyframeEditor(plan, onUpdate, resetSelection = true) {
   const updateWheelSliders = () => { pendingColor = getWheelColor(); lightboxColor.value = pendingColor; satOut.value = `${saturation.value}%`; brightOut.value = `${brightness.value}%`; placeMarker(wheelHue); };
   saturation.oninput = brightness.oninput = updateWheelSliders; saturation.onchange = brightness.onchange = () => updateStyles(selectedIndex, 'screenColor', pendingColor, table, indices);
   const follow = shell.querySelector('#beat-follow'); follow.onclick = () => { followPlayback = !followPlayback; if (followPlayback && activePlaybackIndex >= 0) selectedIndex = activePlaybackIndex; drawTimeline(canvas, times, table, indices); };
+  const zoomTo = (nextZoom, anchorMs = timelineStartMs + Math.min(plan.durationMs / timelineZoom, plan.durationMs) / 2) => { const oldSpan = plan.durationMs / timelineZoom, ratio = oldSpan ? (anchorMs - timelineStartMs) / oldSpan : .5; timelineZoom = Math.max(1, Math.min(32, nextZoom)); const newSpan = plan.durationMs / timelineZoom; timelineStartMs = Math.max(0, Math.min(plan.durationMs - newSpan, anchorMs - newSpan * ratio)); followPlayback = false; drawTimeline(canvas, times, table, indices); };
+  shell.querySelector('#timeline-zoom-out').onclick = () => zoomTo(timelineZoom / 1.5);
+  shell.querySelector('#timeline-zoom-in').onclick = () => zoomTo(timelineZoom * 1.5);
+  shell.querySelector('#timeline-fit').onclick = () => { timelineZoom = 1; timelineStartMs = 0; followPlayback = true; drawTimeline(canvas, times, table, indices); };
+  canvas.onwheel = event => { event.preventDefault(); const rect = canvas.getBoundingClientRect(), x = Math.max(Number(canvas.dataset.left), Math.min(Number(canvas.dataset.right), event.clientX - rect.left)), left = Number(canvas.dataset.left), right = Number(canvas.dataset.right), start = Number(canvas.dataset.start), span = Number(canvas.dataset.span), anchor = start + ((x - left) / Math.max(1, right - left)) * span; zoomTo(timelineZoom * (event.deltaY < 0 ? 1.2 : 1 / 1.2), anchor); };
   if (resizeObserver) resizeObserver.disconnect(); resizeObserver = new ResizeObserver(() => drawTimeline(canvas, times, table, indices)); resizeObserver.observe(canvas.parentElement);
 }
 let resizeObserver = null;
 export function setKeyframePlaybackTime(elapsedMs) {
   activePlaybackTimeMs = Number.isFinite(elapsedMs) ? elapsedMs : null;
-  if (!activePlan?.beatMap || elapsedMs === null || !Number.isFinite(elapsedMs) || elapsedMs < 0 || elapsedMs >= activePlan.durationMs) { if (activePlaybackIndex !== -1 || activePlaybackTimeMs !== null) { activePlaybackIndex = -1; activePlaybackTimeMs = null; redraw?.(); } return; }
-  const times = decodeBeatMap(activePlan.beatMap, activePlan.durationMs); if (!times) return; let low = 0, high = times.length; while (low < high) { const middle = (low + high) >> 1; if (times[middle] <= elapsedMs) low = middle + 1; else high = middle; } const next = low - 1; if (next !== activePlaybackIndex) { activePlaybackIndex = next; redraw?.(); }
+  if (!activePlan?.beatMap || elapsedMs === null || !Number.isFinite(elapsedMs) || elapsedMs < 0 || elapsedMs >= activePlan.durationMs) { activePlaybackIndex = -1; activePlaybackTimeMs = null; redraw?.(); return; }
+  const times = decodeBeatMap(activePlan.beatMap, activePlan.durationMs); if (!times) return; let low = 0, high = times.length; while (low < high) { const middle = (low + high) >> 1; if (times[middle] <= elapsedMs) low = middle + 1; else high = middle; } activePlaybackIndex = low - 1; redraw?.();
 }
 export { renderKeyframeEditor };
 window.addEventListener('crowdsync:theme', () => redraw?.());

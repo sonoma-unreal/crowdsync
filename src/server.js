@@ -140,7 +140,7 @@ function savedRoomConfig(room) {
 }
 function roomFromSavedConfig(id, name, ownerSub, savedShowId, config = {}) {
   const enhancedProtection = config.enhancedProtection !== false;
-  const requestedEffect = typeof config.effect === 'string' && Object.hasOwn(TORCH_EFFECTS, config.effect) ? config.effect : 'pulse';
+  const requestedEffect = typeof config.effect === 'string' && Object.hasOwn(TORCH_EFFECTS, config.effect) ? config.effect : 'solid';
   const requestedRate = typeof config.rate === 'number' && Number.isFinite(config.rate) ? config.rate : 1.2;
   const look = normalizeTorchSettings(requestedEffect, requestedRate, enhancedProtection);
   const groups = Array.isArray(config.groups) && config.groups.length >= 2 && config.groups.length <= 6 && config.groups.every((group) => typeof group === 'string' && group.trim().length > 0 && group.trim().length <= 24)
@@ -151,8 +151,9 @@ function roomFromSavedConfig(id, name, ownerSub, savedShowId, config = {}) {
   return {
     id, instance: crypto.randomUUID(), name, ownerSub, savedShowId,
     status: 'idle', effect: look.effect, rate: look.rate, enhancedProtection,
-    // Output always starts off when a saved show opens in a new room.
-    torchEnabled: false, screenMode: false,
+    // Guests can participate as soon as the host starts the show. The output
+    // remains dark while idle, and stop/blackout still force it off.
+    torchEnabled: true, screenMode: false,
     screenColor: colorsValid ? config.screenColor.toLowerCase() : '#25c3e8',
     accentColor: colorsValid ? config.accentColor.toLowerCase() : '#a855f7',
     startedAt: 0, pausedAt: 0, epoch: 0, sequence: 0, lastCommandId: 0,
@@ -427,7 +428,7 @@ app.get('/join/:id', async (req, reply) => {
   return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html')));
 });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css', 'offset-wheel.html', 'offset-wheel.css', 'offset-wheel.js', 'google-g-logo.png']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'custom-color-picker.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css', 'offset-wheel.html', 'offset-wheel.css', 'offset-wheel.js', 'google-g-logo.png']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
   const mimeType = req.params.file.endsWith('.html') ? 'text/html; charset=utf-8' : req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : req.params.file.endsWith('.png') ? 'image/png' : 'text/javascript; charset=utf-8';
@@ -647,7 +648,7 @@ const heartbeatTimer = setInterval(() => {
       publish(room, 'stop');
       continue;
     }
-    if (room.status === 'running' && room.showPlan && serverNow() - room.startedAt >= room.showPlan.durationMs) {
+    if (room.status === 'running' && room.showPlan && serverNow() - room.startedAt - (room.showPlan.anchorMs || 0) >= room.showPlan.durationMs) {
       room.status = 'idle'; room.startedAt = 0; room.pausedAt = 0; room.torchEnabled = false; room.epoch++;
       publish(room, 'stop');
     }

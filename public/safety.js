@@ -110,7 +110,7 @@ export function normalizeShowPlan(plan, enhancedProtection = true) {
   if (!Number.isSafeInteger(plan.durationMs) || plan.durationMs < 1_000 || plan.durationMs > MAX_SHOW_DURATION_MS) {
     return { ok: false, error: 'Show duration must be between 1 second and 10 minutes' };
   }
-  if (plan.anchorMs !== undefined && (!Number.isSafeInteger(plan.anchorMs) || plan.anchorMs < 0 || plan.anchorMs > MAX_SHOW_ANCHOR_MS)) return { ok: false, error: 'Show score start offset is invalid' };
+  if (plan.anchorMs !== undefined && (!Number.isSafeInteger(plan.anchorMs) || plan.anchorMs < -(plan.durationMs - 1_000) || plan.anchorMs > MAX_SHOW_ANCHOR_MS)) return { ok: false, error: 'Show score start offset is invalid' };
   if (plan.beatMap !== undefined && !decodeBeatMap(plan.beatMap, plan.durationMs)) return { ok: false, error: 'Beat keyframes have an invalid structure or timing' };
   if (plan.beatMode !== undefined && (!['detected', 'tempo-grid', 'beat-this'].includes(plan.beatMode) || plan.beatMap === undefined)) return { ok: false, error: 'Beat keyframe mode is unsupported' };
   if (plan.beatStyles !== undefined && plan.beatMap === undefined) return { ok: false, error: 'Beat styles require a beat timeline' };

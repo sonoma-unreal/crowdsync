@@ -1,10 +1,8 @@
-import { TORCH_EFFECTS } from './safety.js';
-
 const STORAGE_KEY = 'crowdsync.controller.workspace.v2';
 const LAYOUT_PRESETS_KEY = 'crowdsync.controller.workspace-presets.v1';
 const THEME_KEY = 'crowdsync.controller.theme.v1';
 const PERFORMANCE_KEY = 'crowdsync.controller.performance.v1';
-const COMMUNITY_KEY = 'crowdsync.community-look-packs.v1';
+try { localStorage.removeItem('crowdsync.community-look-packs.v1'); } catch {}
 const ICONS = {
   minimize: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.5h10"/></svg>',
   restore: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4h8v8H4z"/></svg>',
@@ -32,7 +30,7 @@ document.body.append(addWindowButton);
 const addWindowDialog = document.createElement('dialog');
 addWindowDialog.className = 'add-window-dialog';
 addWindowDialog.setAttribute('aria-labelledby', 'add-window-title');
-addWindowDialog.innerHTML = '<header><div><div class="eyebrow">WORKSPACE</div><h2 id="add-window-title">Add a window</h2></div><button class="square-icon" value="close" formmethod="dialog" aria-label="Close window picker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p>Drag a title bar to snap windows into place. Hold Shift while dragging to place a window freely over the canvas and other windows. Resize from a lower corner or hide a window with right-click.</p><div class="add-window-options"><button type="button" data-add-window="sync-check"><strong>Sync check</strong><small>Manage the audience timing test.</small></button><button type="button" data-add-window="join-code"><strong>Room code &amp; QR</strong><small>Share the room with guests.</small></button><button type="button" data-add-window="effect-library"><strong>Effects library</strong><small>Choose and preview built-in looks.</small></button><button type="button" data-add-window="community-effects"><strong>Community look packs</strong><small>Import a safety-bounded JSON pack locally.</small></button><button type="button" data-add-window="cue-sheet"><strong>Songs &amp; beat cues</strong><small>Upload local audio and edit detected beats.</small></button><button type="button" data-add-window="crowd-preview"><strong>Audience preview</strong><small>Preview the selected show output.</small></button><button type="button" data-add-window="show-controls"><strong>Live controls</strong><small>Transport, output and audience messaging.</small></button><button type="button" data-add-window="show-activity"><strong>Show activity</strong><small>Recent room events and connection status.</small></button></div><small class="add-window-footnote">Look packs stay on this browser. LightSync does not host a community upload service.</small>';
+addWindowDialog.innerHTML = '<header><div><div class="eyebrow">WORKSPACE</div><h2 id="add-window-title">Add a window</h2></div><button class="square-icon" value="close" formmethod="dialog" aria-label="Close window picker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header><p>Drag a title bar to snap windows into place. Hold Shift while dragging to place a window freely over the canvas and other windows. Resize from a lower corner or hide a window with right-click.</p><div class="add-window-options"><button type="button" data-add-window="sync-check"><strong>Sync check</strong><small>Manage the audience timing test.</small></button><button type="button" data-add-window="join-code"><strong>Room code &amp; QR</strong><small>Share the room with guests.</small></button><button type="button" data-add-window="effect-library"><strong>Effects library</strong><small>Choose and preview built-in looks.</small></button><button type="button" data-add-window="cue-sheet"><strong>Songs &amp; beat cues</strong><small>Upload local audio and edit detected beats.</small></button><button type="button" data-add-window="crowd-preview"><strong>Audience preview</strong><small>Preview the selected show output.</small></button><button type="button" data-add-window="show-controls"><strong>Live controls</strong><small>Transport, output and audience messaging.</small></button><button type="button" data-add-window="show-activity"><strong>Show activity</strong><small>Recent room events and connection status.</small></button></div>';
 document.body.append(addWindowDialog);
 const consoleView = document.querySelector('#console');
 function updateAddButtonVisibility() { addWindowButton.classList.toggle('hidden', !!consoleView?.classList.contains('hidden')); }
@@ -114,7 +112,7 @@ function labelFor(card) {
   const labels = [
     ['audience-setup-card', 'AUDIENCE SYNC'], ['join-card', 'JOIN CODE'],
     ['crowd-preview-card', 'CROWD MONITOR'], ['effects-card', 'LIGHT DESIGN'], ['effect-graph-card', 'EFFECT NODES'],
-    ['cue-builder-card', 'BEAT SEQUENCER'], ['community-effects-card', 'LOCAL LOOK PACKS'],
+    ['cue-builder-card', 'BEAT SEQUENCER'],
     ['live-controls-card', 'LIVE CONSOLE'], ['activity-card', 'ROOM ACTIVITY'],
   ];
   return labels.find(([className]) => card.classList.contains(className))?.[1]
@@ -155,7 +153,6 @@ function setupRoots() {
               : card.classList.contains('effects-card') ? 'effect-library'
                 : card.classList.contains('effect-graph-card') ? 'effect-nodes'
               : card.classList.contains('cue-builder-card') ? 'cue-sheet'
-              : card.classList.contains('community-effects-card') ? 'community-effects'
                 : card.classList.contains('live-controls-card') ? 'show-controls'
                   : card.classList.contains('activity-card') ? 'show-activity' : `window-${children.indexOf(card)}`;
       card.dataset.windowId = id;
@@ -212,7 +209,7 @@ function updateDragField(event) {
   event.currentTarget.style.setProperty('--pointer-y', `${event.clientY - bounds.top}px`);
 }
 function defaultColumns(card) {
-  if (card.classList.contains('cue-builder-card') || card.classList.contains('community-effects-card') || card.classList.contains('effect-graph-card')) return 12;
+  if (card.classList.contains('cue-builder-card') || card.classList.contains('effect-graph-card')) return 12;
   if (card.classList.contains('audience-setup-card') || card.classList.contains('live-controls-card')) return 8;
   if (card.classList.contains('join-card') || card.classList.contains('activity-card')) return 4;
   if (card.classList.contains('crowd-preview-card')) return 7;
@@ -547,69 +544,3 @@ function openWorkspaceWindow(id) {
 addWindowButton.addEventListener('click', () => addWindowDialog.showModal());
 addWindowDialog.querySelector('.square-icon').addEventListener('click', (event) => { event.preventDefault(); addWindowDialog.close(); });
 addWindowDialog.querySelectorAll('[data-add-window]').forEach((button) => button.addEventListener('click', () => openWorkspaceWindow(button.dataset.addWindow)));
-
-function loadCommunityPacks() {
-  try {
-    const packs = JSON.parse(localStorage.getItem(COMMUNITY_KEY) || '[]');
-    if (!Array.isArray(packs)) return [];
-    return packs.slice(0, 40).flatMap((pack) => {
-      if (!pack || typeof pack.id !== 'string' || typeof pack.name !== 'string' || !pack.name.trim() || pack.name.length > 48 || !Array.isArray(pack.looks)) return [];
-      const looks = pack.looks.slice(0, 24).filter((look) => look && typeof look.name === 'string' && !!look.name.trim() && look.name.length <= 40 && Object.hasOwn(TORCH_EFFECTS, look.effect) && /^#[\da-f]{6}$/i.test(look.screenColor) && /^#[\da-f]{6}$/i.test(look.accentColor)).map((look) => ({ name: look.name.trim(), effect: look.effect, screenColor: look.screenColor.toLowerCase(), accentColor: look.accentColor.toLowerCase() }));
-      return looks.length ? [{ id: pack.id, name: pack.name.trim(), looks }] : [];
-    });
-  } catch { return []; }
-}
-let communityPacks = loadCommunityPacks();
-function persistCommunityPacks() {
-  try { localStorage.setItem(COMMUNITY_KEY, JSON.stringify(communityPacks.slice(0, 40))); }
-  catch { window.dispatchEvent(new CustomEvent('crowdsync:toast', { detail: 'Storage is full. Remove a look pack and try again.' })); }
-  renderCommunityPacks();
-}
-function downloadLookPack(pack, filename) {
-  const payload = { version: 1, name: pack.name, looks: pack.looks };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-function renderCommunityPacks() {
-  const list = document.querySelector('#community-effects-list'); if (!list) return;
-  list.replaceChildren();
-  if (!communityPacks.length) { const empty = document.createElement('p'); empty.className = 'small-copy'; empty.textContent = 'No packs imported yet.'; list.append(empty); return; }
-  for (const pack of communityPacks) {
-    const section = document.createElement('section'); section.className = 'community-pack';
-    const heading = document.createElement('div'); heading.className = 'community-pack-heading';
-    const name = document.createElement('strong'); name.textContent = pack.name;
-    const exportPack = document.createElement('button'); exportPack.type = 'button'; exportPack.className = 'button button-quiet'; exportPack.textContent = 'Export';
-    exportPack.addEventListener('click', () => downloadLookPack(pack, `${pack.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'lightsync-pack'}.json`));
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'button button-quiet'; remove.textContent = 'Remove pack';
-    remove.addEventListener('click', () => { communityPacks = communityPacks.filter((entry) => entry.id !== pack.id); persistCommunityPacks(); });
-    heading.append(name, exportPack, remove); section.append(heading);
-    for (const look of pack.looks) {
-      const use = document.createElement('button'); use.type = 'button'; use.className = 'community-look';
-      const colors = document.createElement('span'); colors.className = 'community-look-colors';
-      for (const color of [look.screenColor, look.accentColor]) { const swatch = document.createElement('i'); swatch.style.backgroundColor = color; colors.append(swatch); }
-      const label = document.createElement('span'); label.textContent = `${look.name} · ${TORCH_EFFECTS[look.effect]?.label || look.effect}`;
-      use.append(colors, label); use.addEventListener('click', () => window.dispatchEvent(new CustomEvent('crowdsync:use-look', { detail: look })));
-      section.append(use);
-    }
-    list.append(section);
-  }
-}
-document.querySelector('#community-pack-file')?.addEventListener('change', async (event) => {
-  const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
-  if (file.size > 32_000) { window.dispatchEvent(new CustomEvent('crowdsync:toast', { detail: 'Look packs must be 32 KB or smaller.' })); return; }
-  try {
-    const pack = JSON.parse(await file.text());
-    if (pack?.version !== 1 || typeof pack.name !== 'string' || !pack.name.trim() || pack.name.length > 48 || !Array.isArray(pack.looks) || !pack.looks.length || pack.looks.length > 24) throw new Error('Use a version 1 look pack with 1–24 looks.');
-    const looks = pack.looks.map((look) => {
-      if (!look || typeof look.name !== 'string' || !look.name.trim() || look.name.length > 40 || !Object.hasOwn(TORCH_EFFECTS, look.effect) || !/^#[\da-f]{6}$/i.test(look.screenColor) || !/^#[\da-f]{6}$/i.test(look.accentColor)) throw new Error('Each look needs a short name, built-in effect, and two hex colors.');
-      return { name: look.name.trim(), effect: look.effect, screenColor: look.screenColor.toLowerCase(), accentColor: look.accentColor.toLowerCase() };
-    });
-    communityPacks = [{ id: crypto.randomUUID(), name: pack.name.trim(), looks }, ...communityPacks].slice(0, 40);
-    persistCommunityPacks(); window.dispatchEvent(new CustomEvent('crowdsync:toast', { detail: 'Look pack imported locally.' }));
-  } catch (error) { window.dispatchEvent(new CustomEvent('crowdsync:toast', { detail: error instanceof SyntaxError ? 'That file is not valid JSON.' : error.message || 'The look pack could not be imported.' })); }
-});
-document.querySelector('#community-export-example')?.addEventListener('click', () => {
-  const pack = { version: 1, name: 'LightSync example', looks: [{ name: 'Monochrome pulse', effect: 'pulse', screenColor: '#efeee9', accentColor: '#9d9b92' }] };
-  downloadLookPack(pack, 'lightsync-look-pack.example.json');
-});
-renderCommunityPacks();
