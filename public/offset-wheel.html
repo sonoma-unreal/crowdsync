@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offset Wheel</title>
+<link rel="stylesheet" href="/assets/offset-wheel.css">
+<script src="/assets/offset-wheel.js" defer></script>
+</head>
+<body>
+<div id="panel">
+  <h1>Offset</h1>
+  <button id="reset" aria-label="Reset"><i data-lucide="rotate-ccw"></i></button>
+  <svg id="ring" width="274" height="343" viewBox="0 0 274 343">
+    <defs>
+      <radialGradient id="bez" cx="50%" cy="40%" r="60%"><stop offset="70%" stop-color="#0d0d0d"/><stop offset="100%" stop-color="#232323"/></radialGradient>
+    </defs>
+    <circle cx="137" cy="135" r="101" fill="url(#bez)" stroke="#3b3b3b" stroke-width="1"/>
+    <circle cx="137" cy="135" r="96" fill="none" stroke="#1a1a1a" stroke-width="7"/>
+  </svg>
+  <div id="hw"><div id="halo"></div><svg id="caps" width="200" height="200" viewBox="0 0 200 200"></svg></div>
+  <div id="wheel"><i id="h"></i><i id="v"></i><div id="puck"></div></div>
+  <div class="ch ch-r"><input id="r" value="25.00"><b class="bar-r"></b></div>
+  <div class="ch ch-g"><input id="g" value="25.00"><b class="bar-g"></b></div>
+  <div class="ch ch-b"><input id="b" value="25.00"><b class="bar-b"></b></div>
+  <div id="slider"><div id="ridges"></div></div>
+</div>
+
+</body>
+</html>

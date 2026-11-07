@@ -179,7 +179,8 @@ app.addHook('onSend', async (request, reply, payload) => {
   reply.header('Cache-Control', 'no-store');
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
-  reply.header('X-Frame-Options', 'DENY');
+  const offsetWheelFrame = request.url.split('?')[0] === '/assets/offset-wheel.html';
+  reply.header('X-Frame-Options', offsetWheelFrame ? 'SAMEORIGIN' : 'DENY');
   reply.header('Cross-Origin-Opener-Policy', 'same-origin');
   reply.header('Cross-Origin-Resource-Policy', 'same-origin');
   reply.header('X-DNS-Prefetch-Control', 'off');
@@ -188,7 +189,7 @@ app.addHook('onSend', async (request, reply, payload) => {
   const websocketHost = configuredBase?.host || safeRequestHost;
   const websocketProtocol = configuredBase?.protocol || (request.protocol === 'https' ? 'https:' : 'http:');
   const websocketSource = `${websocketProtocol === 'https:' ? 'wss' : 'ws'}://${websocketHost}`;
-  reply.header('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${websocketSource}; media-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`);
+  reply.header('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ${websocketSource}; media-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors ${offsetWheelFrame ? "'self'" : "'none'"}`);
   reply.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   if (process.env.NODE_ENV === 'production') reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   return payload;
@@ -426,10 +427,10 @@ app.get('/join/:id', async (req, reply) => {
   return reply.type('text/html; charset=utf-8').send(await fs.readFile(path.join(publicDir, 'audience.html')));
 });
 app.get('/assets/:file', async (req, reply) => {
-  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css', 'google-g-logo.png']);
+  const allowed = new Set(['home.js', 'operator.js', 'operator-connection.js', 'audience.js', 'audience-immersive.js', 'controller-workspace.js', 'show-planner.js', 'music-playlist.js', 'keyframe-editor.js', 'effect-graph.js', 'effect-node-editor.js', 'lucide.js', 'safety.js', 'styles.css', 'offset-wheel.html', 'offset-wheel.css', 'offset-wheel.js', 'google-g-logo.png']);
   if (!allowed.has(req.params.file)) return reply.code(404).send({ error: 'Not found' });
   reply.header('Cache-Control', 'no-store');
-  const mimeType = req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : req.params.file.endsWith('.png') ? 'image/png' : 'text/javascript; charset=utf-8';
+  const mimeType = req.params.file.endsWith('.html') ? 'text/html; charset=utf-8' : req.params.file.endsWith('.css') ? 'text/css; charset=utf-8' : req.params.file.endsWith('.png') ? 'image/png' : 'text/javascript; charset=utf-8';
   return reply.type(mimeType).send(await fs.readFile(path.join(publicDir, req.params.file)));
 });
 

@@ -182,27 +182,13 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline-color:#c9c7bf}.
 @media(max-width:860px){.operator-page .workspace-window[data-window-width]{width:min(var(--window-width),100%)}.operator-page .workspace-window:not([data-window-width]){grid-column:1/-1!important}}
 @media(max-width:600px){.operator-page .workspace-window[data-window-width]{width:min(var(--window-width),100%)}.operator-page .workspace-size-readout{right:25px;bottom:6px;font-size:8px}}
 
-/* Offset wheel modeled on the supplied compact DaVinci-style control. */
-.operator-page .effect-color-editor{position:relative;display:block;width:min(274px,100%);height:343px;margin:12px auto 4px;padding:0;overflow:hidden;border:0;border-radius:6px!important;background:linear-gradient(180deg,#323232 0%,#282828 45%,#212121 100%);box-shadow:0 12px 30px #0007,inset 0 1px #ffffff12,inset 0 0 0 1px #0008}
-.operator-page .effect-color-editor-head{position:absolute;z-index:4;top:10px;left:0;right:0;display:flex;justify-content:center;width:auto;padding:0;color:#ececec;font-size:14px;font-weight:500;letter-spacing:.2px}
-.operator-page .effect-color-editor-head button{position:absolute;top:-3px;right:10px;display:grid;place-items:center;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:50%!important;background:transparent;color:#bdbdbd;cursor:pointer}
-.operator-page .effect-color-editor-head button:hover{background:#ffffff14;color:#fff}
-.operator-page .effect-color-editor-head button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.operator-page .effect-offset-wheel-frame{position:absolute;top:35px;left:50%;width:200px;height:200px;transform:translateX(-50%);border:1px solid #3b3b3b;border-radius:50%!important;background:radial-gradient(circle at 50% 40%,#0d0d0d 70%,#232323 100%);box-shadow:0 0 0 5px #1a1a1a,0 0 0 8px #101010;touch-action:none}
-.operator-page .effect-offset-halo{position:absolute;z-index:2;inset:0;border-radius:50%!important;background:conic-gradient(from 180deg,#ffffff36 0%,#fff var(--offset-progress,0%),transparent var(--offset-progress,0%) 100%);-webkit-mask:radial-gradient(circle,transparent 95.3px,#000 96px,#000 98px,transparent 98.7px);mask:radial-gradient(circle,transparent 95.3px,#000 96px,#000 98px,transparent 98.7px);filter:drop-shadow(0 0 2px #ffffff66);cursor:crosshair}
-.operator-page .effect-color-editor .effect-color-wheel{position:absolute;z-index:1;top:9px;left:9px;width:180px;height:180px;max-width:none;margin:0;padding:0;border:0;border-radius:50%!important;overflow:hidden;clip-path:circle(50% at 50% 50%);cursor:crosshair;touch-action:none;background:radial-gradient(circle,rgba(30,30,32,.96) 0%,rgba(30,30,32,.78) 30%,rgba(30,30,32,.38) 62%,rgba(30,30,32,0) 92%),conic-gradient(from 320deg,#ff2a1a,#e61fd0,#2b2bff,#00e5ff,#12e04a,#ffd21a,#ff2a1a);box-shadow:inset 0 0 14px #0009,0 0 0 2px #121212}
-.operator-page .effect-color-editor .effect-color-wheel:before{position:absolute;inset:0;content:"";border:0;border-radius:0;background:linear-gradient(90deg,transparent calc(50% - .5px),#ffffffa6 50%,transparent calc(50% + .5px));pointer-events:none}
-.operator-page .effect-color-editor .effect-color-wheel:after{position:absolute;top:0;bottom:0;left:50%;width:1px;content:"";background:linear-gradient(180deg,#ffffff1a,#ffffffa6 50%,#ffffff1a);pointer-events:none}
-.operator-page .effect-color-editor .effect-color-wheel .effect-color-crosshair{position:absolute;z-index:3;top:50%;left:50%;width:9px;height:9px;border:1px solid #111;border-radius:50%!important;background:radial-gradient(circle at 35% 30%,#fff,#bbb);transform:translate(-50%,-50%);box-shadow:0 0 0 1px #ffffffaa,0 0 8px #ffffff8c;pointer-events:none;transition:left .08s linear,top .08s linear,background .08s linear,box-shadow .08s linear}
-.operator-page .effect-offset-values{position:absolute;top:247px;left:50%;display:flex;gap:13px;transform:translateX(-50%)}
-.operator-page .effect-offset-value{display:grid;width:52px;justify-items:stretch}
-.operator-page .effect-offset-value input{width:52px;height:25px;min-width:0;margin:0;padding:3px 0;border:1px solid #050505;border-radius:3px!important;background:linear-gradient(180deg,#0b0b0b,#161616);box-shadow:inset 0 1px 3px #000c,0 1px #ffffff0d;color:#fff;font:13px "Segoe UI",Arial,sans-serif;text-align:center;font-variant-numeric:tabular-nums;touch-action:none}
-.operator-page .effect-offset-value input:focus{border-color:#4a4a4a;box-shadow:inset 0 1px 3px #000c,0 0 0 2px #ffffff0f;outline:none}
-.operator-page .effect-offset-value b{display:block;height:3px;margin-top:6px;border-radius:2px!important;background:linear-gradient(90deg,transparent,var(--offset-color) 20%,var(--offset-color) 80%,transparent)}
-.operator-page .effect-offset-master{position:absolute;top:312px;left:50%;display:block;width:176px;height:15px;margin:0;padding:0;overflow:hidden;transform:translateX(-50%);border:0;border-radius:8px!important;background:linear-gradient(180deg,#050505,#0e0e0e 60%,#151515);box-shadow:inset 0 2px 4px #000,0 1px #ffffff0f;cursor:ew-resize}
-.operator-page .effect-offset-ridges{position:absolute;inset:3px 6px;border-radius:5px!important;background:repeating-linear-gradient(90deg,#3d3d3d 0 2px,#141414 2px 6px);-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);pointer-events:none}
-.operator-page .effect-offset-master input{position:absolute;z-index:2;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize}
-.operator-page .effect-offset-master-value,.operator-page #effect-node-color{display:none!important}
+/* The supplied Offset Wheel runs in an isolated, same-origin frame. */
+.operator-page .effect-graph-layout{grid-template-columns:minmax(0,1fr) minmax(300px,320px)}
+.operator-page .effect-color-editor{display:block;width:274px;height:343px;margin:8px auto 4px;padding:0;overflow:hidden;border:0;border-radius:0!important;background:transparent;box-shadow:none}
+.operator-page .effect-color-editor iframe{display:block;width:274px;height:343px;max-width:none;border:0;background:transparent}
+.operator-page .effect-node-inspector{max-height:none;overflow:visible}
+.operator-page #effect-node-controls{max-height:none;overflow:visible}
+@media(max-width:860px){.operator-page .effect-graph-layout{grid-template-columns:minmax(0,1fr)}}
 
 /* Compact desktop-style chrome for controller workspace panels. */
 .workspace-windowbar{height:26px;min-height:26px;gap:8px;margin:-18px -18px 14px;padding:0 0 0 14px;border-bottom:1px solid color-mix(in srgb,var(--desk-line) 82%,transparent);background:color-mix(in srgb,var(--desk-bg) 82%,transparent);cursor:grab;touch-action:none;user-select:none}
@@ -578,19 +564,3 @@ body{font-family:var(--font);font-weight:400;font-synthesis:none}
 .operator-page .effect-node-canvas,.operator-page .effect-node-inspector,.operator-page .effect-inspector-panel{scrollbar-width:none;overscroll-behavior:contain}
 .operator-page .workspace-windowbar{position:sticky;top:0;z-index:8;background:var(--desk-bg);box-shadow:0 1px 0 var(--desk-line)}
 .operator-page .workspace-window.is-minimized-window .workspace-windowbar{position:relative}
-/* Resolve-inspired channel offset faders: 225.00 maps to full 255 RGB output. */
-.effect-offset-controls{display:flex;align-items:flex-end;justify-content:center;gap:8px;width:100%;padding:2px 0 7px}
-.effect-offset-knob{display:grid;justify-items:center;gap:4px;width:39px;min-width:0}
-.effect-offset-track{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;width:19px;height:86px;padding:2px 0;border:1px solid var(--desk-line);border-radius:10px;background:linear-gradient(90deg,#0b0b0b,#292929 48%,#111 100%);color:var(--desk-muted);font:9px var(--mono);line-height:10px}
-.effect-offset-track:after{position:absolute;top:50%;left:-17px;right:-17px;height:1px;content:"";background:#777;opacity:.65;pointer-events:none}
-.effect-offset-track i{z-index:1;font-style:normal;pointer-events:none}
-.effect-offset-track input{position:absolute;z-index:2;inset:0;width:100%;height:100%;margin:0;appearance:slider-vertical;-webkit-appearance:slider-vertical;writing-mode:vertical-lr;direction:rtl;opacity:.98;cursor:ns-resize;accent-color:var(--offset-color)}
-.effect-offset-track input::-webkit-slider-runnable-track{width:3px;border:0;background:linear-gradient(90deg,transparent 40%,#777 40% 60%,transparent 60%)}
-.effect-offset-track input::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:6px;margin-left:-4px;border:1px solid var(--offset-color);border-radius:1px;background:#171717;box-shadow:0 0 4px color-mix(in srgb,var(--offset-color) 35%,transparent)}
-.effect-offset-track input::-moz-range-track{width:3px;border:0;background:#777}
-.effect-offset-track input::-moz-range-thumb{width:10px;height:5px;border:1px solid var(--offset-color);border-radius:1px;background:#171717}
-.effect-offset-knob output{width:100%;padding:3px 1px;border:1px solid var(--desk-line);background:var(--desk-bg);color:var(--desk-text);font:9px var(--mono);text-align:center;font-variant-numeric:tabular-nums}
-.effect-offset-knob small{width:100%;padding-top:3px;border-top:2px solid var(--offset-color);color:var(--desk-muted);font:8px var(--mono);text-align:center}
-@media(max-width:860px){.effect-offset-track{height:76px}}
-
-.effect-offset-master{position:relative;display:block;width:min(100%,116px);height:16px;margin:0 auto;padding:0 4px;border:1px solid #292929;border-radius:999px;background:repeating-linear-gradient(90deg,#555 0 1px,transparent 1px 4px),linear-gradient(#242424,#101010);box-shadow:inset 0 1px 4px #000}.effect-offset-master input{position:absolute;inset:0;width:100%;height:100%;margin:0;appearance:none;-webkit-appearance:none;border-radius:999px;background:transparent;cursor:ew-resize}.effect-offset-master input::-webkit-slider-runnable-track{height:100%;background:transparent}.effect-offset-master input::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;margin-top:2px;border:1px solid #aaa;border-radius:50%;background:#ddd;box-shadow:0 0 0 2px #171717}.effect-offset-master input::-moz-range-track{height:100%;background:transparent}.effect-offset-master input::-moz-range-thumb{width:8px;height:8px;border:1px solid #aaa;border-radius:50%;background:#ddd;box-shadow:0 0 0 2px #171717}.effect-offset-master output{position:absolute;right:calc(100% + 7px);top:50%;color:var(--desk-dim);font:8px var(--mono);transform:translateY(-50%);pointer-events:none}
